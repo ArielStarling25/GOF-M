@@ -55,7 +55,11 @@ cd submodules/tetra-triangulation
 conda install cmake
 conda install conda-forge::gmp
 conda install conda-forge::cgal
-cmake .
+cmake . \
+    -DCMAKE_C_COMPILER=$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-gcc \
+    -DCMAKE_CXX_COMPILER=$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-g++ \
+    -DCMAKE_CUDA_HOST_COMPILER=$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-g++ \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 # you can specify your own cuda path
 # export CPATH=/usr/local/cuda-11.3/targets/x86_64-linux/include:$CPATH
 make 
