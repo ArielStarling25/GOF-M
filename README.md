@@ -70,6 +70,15 @@ pip install -e .
 
 Please download the Mip-NeRF 360 dataset from the [official webiste](https://jonbarron.info/mipnerf360/), the NeRF-Synthetic dataset from the [NeRF's official Google Drive](https://drive.google.com/drive/folders/128yBriW1IG_3NJ5Rp7APSTZsJqdJdfc1), the preprocessed DTU dataset from [2DGS](https://surfsplatting.github.io/), the proprocessed Tanks and Temples dataset from [here](https://huggingface.co/datasets/ZehaoYu/gaussian-opacity-fields/tree/main). You need to download the ground truth point clouds from the [DTU dataset](https://roboimagedata.compute.dtu.dk/?page_id=36) and save to `dtu_eval/Offical_DTU_Dataset` to evaluate the geometry reconstruction. For the [Tanks and Temples](https://www.tanksandtemples.org/download/) dataset, you need to download the ground truth point clouds, alignments and cropfiles and save to `eval_tnt/TrainingSet`, such as `eval_tnt/TrainingSet/Caterpillar/Caterpillar.ply`.
 
+> An Updated and simplified README is still a work in progress...
+
+- Mip-NeRF 360
+  - [Official Website](https://jonbarron.info/mipnerf360/)
+  - Download either '[Dataset Pt.1](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip)' or '[Dataset Pt.2](https://storage.googleapis.com/gresearch/refraw360/360_extra_scenes.zip)'
+  - Adjust the available scenes accordingly within the 'run_mipnerf360.py' script
+- NeRF-Synthetic
+- DTU Dataset
+- Tanks and Temples (TNT)
 
 # Training and Evaluation
 ```
