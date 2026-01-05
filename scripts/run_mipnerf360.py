@@ -6,11 +6,15 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
 
-#scenes = ["bicycle", "bonsai", "counter", "flowers", "garden", "stump", "treehill", "kitchen", "room"]
-scenes = ["bicycle", "bonsai", "counter", "garden", "stump", "kitchen", "room"]
+# scenes = ["bicycle", "bonsai", "counter", "flowers", "garden", "stump", "treehill", "kitchen", "room"] # I dont have access to all unfortunately
+# scenes = ["bicycle", "bonsai", "counter", "garden", "stump", "kitchen", "room"]
+scenes = ["kitchen"]
+# scenes = ["stump"]
 
 #factors = [4, 2, 2, 4, 4, 4, 4, 2, 2]
-factors = [4, 2, 2, 4, 4, 2, 2]
+# factors = [4, 2, 2, 4, 4, 2, 2]
+factors = [2]
+# factors = [4]
 
 excluded_gpus = set([])
 
@@ -28,22 +32,23 @@ def train_scene(gpu, scene, factor):
     dataset_path = os.path.join(project_root, "datasets", "360_v2", scene)
     print("Dataset Path set to: ", dataset_path)
 
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} --port {6109+int(gpu)}"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} --port {6109+int(gpu)}"
     print(cmd)
     if not dry_run:
        os.system(cmd)
 
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python3 render.py -m {output_dir}/{scene} --data_device cpu --skip_train"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 render.py -m {output_dir}/{scene} --data_device cpu --skip_train"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python3 metrics.py -m {output_dir}/{scene}"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 metrics.py -m {output_dir}/{scene}"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration 30000"
+    # cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration 30000"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration 1200 --texture_mesh"
     print(cmd)
     if not dry_run:
         os.system(cmd)
