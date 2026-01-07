@@ -7,18 +7,21 @@ import time
 from pathlib import Path
 
 # scenes = ["bicycle", "bonsai", "counter", "flowers", "garden", "stump", "treehill", "kitchen", "room"] # I dont have access to all unfortunately
+
 # scenes = ["bicycle", "bonsai", "counter", "garden", "stump", "kitchen", "room"]
-scenes = ["kitchen"]
-# scenes = ["stump"]
+# scenes = ["kitchen"]
+scenes = ["stump"]
 
 #factors = [4, 2, 2, 4, 4, 4, 4, 2, 2]
 # factors = [4, 2, 2, 4, 4, 2, 2]
-factors = [2]
-# factors = [4]
+# factors = [2]
+factors = [8]
 
 excluded_gpus = set([])
 
 output_dir = "exp_360/release"
+
+set_iterations = 10000
 
 dry_run = False
 
@@ -48,7 +51,7 @@ def train_scene(gpu, scene, factor):
         os.system(cmd)
     
     # cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration 30000"
-    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration 1200 --texture_mesh"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration {set_iterations} --texture_mesh"
     print(cmd)
     if not dry_run:
         os.system(cmd)
@@ -64,7 +67,7 @@ def worker(gpu, scene, factor):
 def dispatch_jobs(jobs, executor):
     future_to_job = {}
     reserved_gpus = set()  # GPUs that are slated for work but may not be active yet
-    print("Starting Job Dispatcher...")
+    print("Starting Job Dispatcher... MipNeRF360")
 
     while jobs or future_to_job:
         # Get the list of available GPUs, not including those that are reserved.

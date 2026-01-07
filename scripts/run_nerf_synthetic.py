@@ -4,8 +4,10 @@ import GPUtil
 from concurrent.futures import ThreadPoolExecutor
 import time
 import itertools
+from pathlib import Path
 
-scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
+# scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
+scenes = ["lego"]
 
 factors = [1]
 
@@ -15,23 +17,36 @@ dataset_dir = "nerf_synthetic"
 
 dry_run = False
 
-excluded_gpus = set([])
+set_iterations = 1200
 
+excluded_gpus = set([])
 
 jobs = list(itertools.product(scenes, factors))
 
 def train_scene(gpu, scene, factor):
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python train.py -s {dataset_dir}/{scene} -m {output_dir}/{scene} --eval --white_background --port {6209+int(gpu)}"
+    current_file_path = Path(__file__).resolve()
+    scripts_dir = current_file_path.parent
+    project_root = scripts_dir.parent
+    #dataset_path = project_root / "datasets" / "360_v2" / scene
+    dataset_path = os.path.join(project_root, "datasets", dataset_dir, scene)
+    print("Dataset Path set to: ", dataset_path)
+
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval --white_background --port {6209+int(gpu)}"
     print(cmd)
     if not dry_run:
         os.system(cmd)
 
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python render.py -m {output_dir}/{scene} --skip_train"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 render.py -m {output_dir}/{scene} --skip_train"
     print(cmd)
     if not dry_run:
         os.system(cmd)
         
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python metrics.py -m {output_dir}/{scene}"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 metrics.py -m {output_dir}/{scene}"
+    print(cmd)
+    if not dry_run:
+        os.system(cmd)
+
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration {set_iterations} --texture_mesh"
     print(cmd)
     if not dry_run:
         os.system(cmd)
@@ -49,6 +64,7 @@ def worker(gpu, scene, factor):
 def dispatch_jobs(jobs, executor):
     future_to_job = {}
     reserved_gpus = set()  # GPUs that are slated for work but may not be active yet
+    print("Starting Job Dispatcher... NeRF Synthetic")
 
     while jobs or future_to_job:
         # Get the list of available GPUs, not including those that are reserved.
@@ -74,7 +90,7 @@ def dispatch_jobs(jobs, executor):
             print(f"Job {job} has finished., rellasing GPU {gpu}")
         # (Optional) You might want to introduce a small delay here to prevent this loop from spinning very fast
         # when there are no GPUs available.
-        time.sleep(5)
+        time.sleep(1)
         
     print("All jobs have been processed.")
 
