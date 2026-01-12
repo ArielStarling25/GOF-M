@@ -15,14 +15,14 @@ scenes = ["kitchen"]
 #factors = [4, 2, 2, 4, 4, 4, 4, 2, 2]
 # factors = [4, 2, 2, 4, 4, 2, 2]
 # factors = [2]
-# factors = [4]
-factors = [8]
+factors = [4]
+# factors = [8]
 
 excluded_gpus = set([])
 
 output_dir = "exp_360/release"
 
-set_iterations = 1500
+set_iterations = 10000
 
 dry_run = False
 
