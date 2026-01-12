@@ -27,50 +27,113 @@ from scene.cameras import Camera
 from einops import einsum
 from typing import List
 
+# @torch.no_grad()
+# def get_frustum_mask(points: torch.Tensor, cameras: List[Camera], near: float = 0.02, far: float = 1e6):
+#     H, W = cameras[0].image_height, cameras[0].image_width
+
+#     intrinsics = torch.stack(
+#         [
+#             torch.Tensor(
+#                 [[cam.focal_x, 0, W / 2],
+#                  [0, cam.focal_y, H / 2],
+#                  [0, 0, 1]]
+#             ) for cam in cameras
+#         ], 
+#         dim=0
+#     ).to(points.device)
+
+#     # full_proj_matrices: (n_view, 4, 4)
+#     view_matrices = torch.stack(
+#         [cam.world_view_transform for cam in cameras], dim=0
+#     ).transpose(1, 2)
+
+#     ones = torch.ones_like(points[:, 0]).unsqueeze(-1)
+#     # homo_points: (N, 4)
+#     homo_points = torch.cat([points, ones], dim=-1)
+
+#     # uv_points: (n_view, N, 4, 4)
+#     # Apply batch matrix multiplication to get uv_points for all cameras
+#     view_points = einsum(view_matrices, homo_points, "n_view b c, N c -> n_view N b")
+#     view_points = view_points[:, :, :3]
+
+#     uv_points = einsum(intrinsics, view_points, "n_view b c, n_view N c -> n_view N b")
+
+#     z = uv_points[:, :, -1:]
+#     uv_points = uv_points[:, :, :2] / z
+#     u, v = uv_points[:, :, 0], uv_points[:, :, 1]
+
+#     # Optionally, we can apply near-far culling
+#     # Apply near-far culling
+#     depth = view_points[:, :, -1]
+#     cull_near_fars = (depth >= near) & (depth <= far)
+
+#     # Apply frustum mask
+#     mask = torch.any(cull_near_fars & (u >= 0) & (u <= W-1) & (v >= 0) & (v <= H-1), dim=0)
+#     return mask
+
 @torch.no_grad()
-def get_frustum_mask(points: torch.Tensor, cameras: List[Camera], near: float = 0.02, far: float = 1e6):
+def get_frustum_mask(points: torch.Tensor, cameras: List[Camera], near: float = 0.02, far: float = 1e6, batch_size: int = 16):
     H, W = cameras[0].image_height, cameras[0].image_width
+    N = points.shape[0]
+    device = points.device
+    
+    # Init a mask of all false (size N) on GPU
+    # this mask is progressively updated as we check batches of cameras
+    final_mask = torch.zeros(N, dtype=torch.bool, device=device)
 
-    intrinsics = torch.stack(
-        [
-            torch.Tensor(
-                [[cam.focal_x, 0, W / 2],
-                 [0, cam.focal_y, H / 2],
-                 [0, 0, 1]]
-            ) for cam in cameras
-        ], 
-        dim=0
-    ).to(points.device)
-
-    # full_proj_matrices: (n_view, 4, 4)
-    view_matrices = torch.stack(
-        [cam.world_view_transform for cam in cameras], dim=0
-    ).transpose(1, 2)
-
+    # prepare homogeneous points once (N, 4), as this doesn't change per camera
     ones = torch.ones_like(points[:, 0]).unsqueeze(-1)
-    # homo_points: (N, 4)
     homo_points = torch.cat([points, ones], dim=-1)
 
-    # uv_points: (n_view, N, 4, 4)
-    # Apply batch matrix multiplication to get uv_points for all cameras
-    view_points = einsum(view_matrices, homo_points, "n_view b c, N c -> n_view N b")
-    view_points = view_points[:, :, :3]
+    # iterate over cameras in small batches to save memory
+    for i in range(0, len(cameras), batch_size):
+        chunk_cameras = cameras[i : i + batch_size]
+        intrinsics = torch.stack(
+            [
+                torch.Tensor(
+                    [[cam.focal_x, 0, W / 2],
+                     [0, cam.focal_y, H / 2],
+                     [0, 0, 1]]
+                ) for cam in chunk_cameras
+            ], 
+            dim=0
+        ).to(device)
 
-    uv_points = einsum(intrinsics, view_points, "n_view b c, n_view N c -> n_view N b")
+        view_matrices = torch.stack(
+            [cam.world_view_transform for cam in chunk_cameras], dim=0
+        ).transpose(1, 2)
 
-    z = uv_points[:, :, -1:]
-    uv_points = uv_points[:, :, :2] / z
-    u, v = uv_points[:, :, 0], uv_points[:, :, 1]
+        # resultant shape is (batch_size, N, 3) instead of (all_cameras, N, 3)
+        view_points = einsum(view_matrices, homo_points, "n_view b c, N c -> n_view N b")
+        view_points = view_points[:, :, :3]
 
-    # Optionally, we can apply near-far culling
-    # Apply near-far culling
-    depth = view_points[:, :, -1]
-    cull_near_fars = (depth >= near) & (depth <= far)
+        uv_points = einsum(intrinsics, view_points, "n_view b c, n_view N c -> n_view N b")
 
-    # Apply frustum mask
-    mask = torch.any(cull_near_fars & (u >= 0) & (u <= W-1) & (v >= 0) & (v <= H-1), dim=0)
-    return mask
+        z = uv_points[:, :, -1:]
+        # Add epsilon to avoid div by zero errors
+        uv_points = uv_points[:, :, :2] / (z + 1e-8)
+        u, v = uv_points[:, :, 0], uv_points[:, :, 1]
 
+        # Apply near-far culling
+        depth = view_points[:, :, -1]
+        cull_near_fars = (depth >= near) & (depth <= far)
+
+        # Apply frustum mask logic for this batch
+        # visible if (Depth OK) AND (Inside Screen Bounds)
+        batch_mask = (cull_near_fars & (u >= 0) & (u <= W-1) & (v >= 0) & (v <= H-1))
+
+        # Check if points are visible in ANY camera within this current batch
+        batch_any_visible = torch.any(batch_mask, dim=0)
+
+        # final mask step VV
+ 
+        # A point is valid if it was visible in previous batches OR it is visible in this batch
+        final_mask |= batch_any_visible
+        
+        # delete temporary tensors to free VRAM for the next iteration
+        del view_points, uv_points, z, u, v, depth, cull_near_fars, batch_mask, intrinsics, view_matrices
+        # torch.cuda.empty_cache() 
+    return final_mask
 
 class GaussianModel:
 

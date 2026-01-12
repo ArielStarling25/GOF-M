@@ -9,19 +9,20 @@ from pathlib import Path
 # scenes = ["bicycle", "bonsai", "counter", "flowers", "garden", "stump", "treehill", "kitchen", "room"] # I dont have access to all unfortunately
 
 # scenes = ["bicycle", "bonsai", "counter", "garden", "stump", "kitchen", "room"]
-# scenes = ["kitchen"]
-scenes = ["stump"]
+scenes = ["kitchen"]
+# scenes = ["stump"]
 
 #factors = [4, 2, 2, 4, 4, 4, 4, 2, 2]
 # factors = [4, 2, 2, 4, 4, 2, 2]
 # factors = [2]
+# factors = [4]
 factors = [8]
 
 excluded_gpus = set([])
 
 output_dir = "exp_360/release"
 
-set_iterations = 10000
+set_iterations = 1500
 
 dry_run = False
 
