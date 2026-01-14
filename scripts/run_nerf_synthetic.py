@@ -8,7 +8,8 @@ from pathlib import Path
 
 # scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
 # scenes = ["lego"]
-scenes = ['lego', 'materials', 'drums', 'ficus']
+# scenes = ['lego', 'materials', 'drums', 'ficus']
+scenes = ['hotdog']
 
 factors = [1]
 
@@ -18,7 +19,7 @@ dataset_dir = "nerf_synthetic"
 
 dry_run = False
 
-set_iterations = 10000
+set_iterations = 30000
 
 excluded_gpus = set([])
 

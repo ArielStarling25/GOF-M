@@ -75,8 +75,13 @@ Please download the Mip-NeRF 360 dataset from the [official webiste](https://jon
 - Mip-NeRF 360
   - [Official Website](https://jonbarron.info/mipnerf360/)
   - Download either '[Dataset Pt.1](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip)' or '[Dataset Pt.2](https://storage.googleapis.com/gresearch/refraw360/360_extra_scenes.zip)'
+  - Place downloaded dataset into datasets
   - Adjust the available scenes accordingly within the 'run_mipnerf360.py' script
 - NeRF-Synthetic
+  - [Official Release](https://github.com/bmild/nerf) 
+  - Download [Dataset](https://drive.google.com/file/d/1OsiBs2udl32-1CqTXCitmov4NQCYdA9g/view?usp=drive_link)
+  - Place downloaded dataset into datasets
+  - Adjust the available scenes accordingly within the 'run_nerf_synthetic.py' script
 - DTU Dataset
 - Tanks and Temples (TNT)
 
