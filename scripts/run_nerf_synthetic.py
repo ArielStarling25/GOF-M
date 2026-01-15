@@ -9,7 +9,9 @@ from pathlib import Path
 # scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
 # scenes = ["lego"]
 # scenes = ['lego', 'materials', 'drums', 'ficus']
-scenes = ['hotdog']
+scenes = ["materials"]
+# scenes = ['hotdog', 'lego', 'materials', 'drums', 'ficus', 'drums']
+# scenes = ['hotdog']
 
 factors = [1]
 

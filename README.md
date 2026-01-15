@@ -42,8 +42,8 @@ cd gaussian-opacity-fields
 conda create -y -n gof python=3.8
 conda activate gof
 
-pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
-conda install cudatoolkit-dev=11.3 -c conda-forge
+pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+conda install cudatoolkit-dev=11.8 -c conda-forge
 
 pip install -r requirements.txt
 
@@ -75,15 +75,20 @@ Please download the Mip-NeRF 360 dataset from the [official webiste](https://jon
 - Mip-NeRF 360
   - [Official Website](https://jonbarron.info/mipnerf360/)
   - Download either '[Dataset Pt.1](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip)' or '[Dataset Pt.2](https://storage.googleapis.com/gresearch/refraw360/360_extra_scenes.zip)'
-  - Place downloaded dataset into datasets
+  - Place downloaded and extracted dataset into '/datasets'
   - Adjust the available scenes accordingly within the 'run_mipnerf360.py' script
 - NeRF-Synthetic
   - [Official Release](https://github.com/bmild/nerf) 
   - Download [Dataset](https://drive.google.com/file/d/1OsiBs2udl32-1CqTXCitmov4NQCYdA9g/view?usp=drive_link)
-  - Place downloaded dataset into datasets
+  - Place downloaded and extracted dataset into '/datasets'
   - Adjust the available scenes accordingly within the 'run_nerf_synthetic.py' script
 - DTU Dataset
+  - Download [Dataset](https://drive.google.com/file/d/1ODiOu72tAGPTnhVn0cFZ9MvymDgcoHxQ/view?usp=drive_link)
+  - Place downloaded and extracted dataset into '/datasets'
+  - WIP: Add evaluation dataset
 - Tanks and Temples (TNT)
+  - Download [Dataset](https://huggingface.co/datasets/ZehaoYu/gaussian-opacity-fields/blob/main/TNT_GOF.zip)
+  - Place downloaded and extracted dataset into '/datasets'
 
 # Training and Evaluation
 ```

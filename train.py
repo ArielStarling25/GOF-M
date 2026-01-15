@@ -90,18 +90,18 @@ def L1_loss_appearance(image, gt_image, gaussians, view_idx, return_transformed_
     
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
-    tb_writer = prepare_output_and_logger(dataset)
-    gaussians = GaussianModel(dataset.sh_degree)
-    scene = Scene(dataset, gaussians)
-    gaussians.training_setup(opt)
-    if checkpoint:
+    tb_writer = prepare_output_and_logger(dataset)                              # Setting up output folders and necessary loggers
+    gaussians = GaussianModel(dataset.sh_degree)                                # Setting up the 3D Gaussian objects   
+    scene = Scene(dataset, gaussians)                                           # Setting up the overall 3D Gaussian Field
+    gaussians.training_setup(opt)                                               # Initialising the Gaussians within the field
+    if checkpoint:                                                              # Loading the Deep Learning Model (if any)
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
 
-    bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+    bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]             # Sets the background colour if the dataset consists of .png with no backgrounds
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
-    iter_start = torch.cuda.Event(enable_timing = True)
+    iter_start = torch.cuda.Event(enable_timing = True)                         
     iter_end = torch.cuda.Event(enable_timing = True)
 
     trainCameras = scene.getTrainCameras().copy()
@@ -219,55 +219,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         loss = rgb_loss + depth_normal_loss * lambda_depth_normal + distortion_loss * lambda_distortion
         loss.backward()
         et_fl = time.perf_counter()                                # ====== TIMER ======
-
-        # VVVVVVVVVVVVVVVVV CHANGES VVVVVVVVVVVVVVVVVV
-        # # Initialize other losses to 0
-        # depth_normal_loss = 0.0
-        # distortion_loss = 0.0
-
-        # # 2. Check if we are in a "Regularization Iteration" (e.g., every 5 steps)
-        # # AND ensure we are past the start iteration for these losses
-        # reg_interval = 5 
-        # do_regularization = (iteration % reg_interval == 0)
-
-        # if do_regularization:
-        #     # --- Only do this heavy math every 5th step ---
-            
-        #     # Check iteration thresholds
-        #     lambda_distortion = opt.lambda_distortion if iteration >= opt.distortion_from_iter else 0.0
-        #     lambda_depth_normal = opt.lambda_depth_normal if iteration >= opt.depth_normal_from_iter else 0.0
-
-        #     # Only calculate if lambdas are > 0
-        #     if lambda_distortion > 0:
-        #         distortion_map = rendering[8, :, :]
-        #         distortion_loss = distortion_map.mean()
-                
-        #     if lambda_depth_normal > 0:
-        #         # This block is VERY expensive for backward()
-        #         depth = rendering[6, :, :]
-        #         depth_normal, _ = depth_to_normal(viewpoint_cam, depth[None, ...])
-        #         depth_normal = depth_normal.permute(2, 0, 1)
-        #         render_normal = rendering[3:6, :, :]
-        #         render_normal = torch.nn.functional.normalize(render_normal, p=2, dim=0)
-                
-        #         c2w = (viewpoint_cam.world_view_transform.T).inverse()
-        #         normal2 = c2w[:3, :3] @ render_normal.reshape(3, -1)
-        #         render_normal_world = normal2.reshape(3, *render_normal.shape[1:])
-                
-        #         normal_error = 1 - (render_normal_world * depth_normal).sum(dim=0)
-        #         depth_normal_loss = normal_error.mean()
-
-        #     # Apply the lambdas inside the if block
-        #     # Note: We multiply by reg_interval to keep the magnitude of the gradient roughly the same
-        #     loss = rgb_loss + (depth_normal_loss * lambda_depth_normal * reg_interval) + (distortion_loss * lambda_distortion * reg_interval)
-
-        # else:
-        #     # Standard fast pass
-        #     loss = rgb_loss
-
-        # # 3. Backward Pass
-        # loss.backward()
-        # ^^^^^^^^^^^^^^^^^ CHANGES ^^^^^^^^^^^^^^^^^
 
         st_iterR = time.perf_counter()                                # ====== TIMER ======
         iter_end.record()

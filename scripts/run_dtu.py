@@ -27,29 +27,29 @@ def train_scene(gpu, scene, factor):
     current_file_path = Path(__file__).resolve()
     scripts_dir = current_file_path.parent
     project_root = scripts_dir.parent
-    dataset_path = os.path.join(project_root, "datasets", dataset_dir, f"dtu_scan{scene}")
+    dataset_path = os.path.join(project_root, "datasets", dataset_dir, f"scan{scene}")
     print("Dataset Path set to: ", dataset_path)
     
     # cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python train.py -s DTU_mask/scan{scene} -m {output_dir}/scan{scene} -r {factor} --use_decoupled_appearance --lambda_distortion 1000"
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python train.py -s {dataset_path} -m {output_dir}/scan{scene} -r {factor} --use_decoupled_appearance --lambda_distortion 1000"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/scan{scene} -r {factor} --use_decoupled_appearance --lambda_distortion 1000"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
     # marching tetrahedra with binary search
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python extract_mesh.py -m {output_dir}/scan{scene} --iteration {set_iterations}"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/scan{scene} --iteration {set_iterations} --texture_mesh"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
     # tsdf fusion
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python extract_mesh_tsdf.py -m {output_dir}/scan{scene} --iteration {set_iterations}"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh_tsdf.py -m {output_dir}/scan{scene} --iteration {set_iterations}"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
     # evaluate
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python evaluate_dtu_mesh.py -m {output_dir}/scan{scene} --iteration {set_iterations}"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 evaluate_dtu_mesh.py -m {output_dir}/scan{scene} --iteration {set_iterations}"
     print(cmd)
     if not dry_run:
         os.system(cmd)
