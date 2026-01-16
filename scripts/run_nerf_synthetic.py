@@ -6,10 +6,10 @@ import time
 import itertools
 from pathlib import Path
 
-# scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
+scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
 # scenes = ["lego"]
 # scenes = ['lego', 'materials', 'drums', 'ficus']
-scenes = ["materials"]
+# scenes = ["materials"]
 # scenes = ['hotdog', 'lego', 'materials', 'drums', 'ficus', 'drums']
 # scenes = ['hotdog']
 
