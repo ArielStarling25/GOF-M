@@ -361,7 +361,7 @@ class GaussianModel:
         xyz_unsqueezed = xyz.unsqueeze(0)
 
         for i in range(0, num_cameras, chunk_size):
-            print(f"num_cameras:[{num_cameras}]|chunk_size:[{chunk_size}]|iter:[{i}]")
+            # print(f"num_cameras:[{num_cameras}]|chunk_size:[{chunk_size}]|iter:[{i}]")
             end = min(i + chunk_size, num_cameras)
             
             # Slice current batch of camera params

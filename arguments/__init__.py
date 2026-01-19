@@ -12,6 +12,7 @@
 from argparse import ArgumentParser, Namespace
 import sys
 import os
+import copy
 
 class GroupParams:
     pass
@@ -76,14 +77,17 @@ class PipelineParams(ParamGroup):
         self.debug = False
         super().__init__(parser, "Pipeline Parameters")
 
+# lr = learning rate
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
-        # self.iterations = 30_000          # Training Iterations   
-        self.iterations = 30_000 #           # Training Iterations
-        self.position_lr_init = 0.00016
+        # self.iterations = 30_000                          # Training Iterations   
+        self.iterations = 15_000 #                          # Training Iterations
+        # self.position_lr_init = 0.00016                   # Increasing this parameter risks instability
+        self.position_lr_init = 0.00016                     # Increasing this parameter risks instability
         self.position_lr_final = 0.0000016
         self.position_lr_delay_mult = 0.01
-        self.position_lr_max_steps = 30_000
+        # self.position_lr_max_steps = 30_000               # 
+        self.position_lr_max_steps = copy.copy(self.iterations)    
         self.feature_lr = 0.0025
         self.opacity_lr = 0.05
         self.scaling_lr = 0.005
@@ -96,13 +100,14 @@ class OptimizationParams(ParamGroup):
         self.lambda_depth_normal = 0.05
         self.distortion_from_iter = 15000
         self.depth_normal_from_iter = 15000
-        self.densification_interval = 100
+        self.densification_interval = 100               
+        # self.densification_interval = 50             
         self.opacity_reset_interval = 3000
         self.densify_from_iter = 500
-        # self.densify_until_iter = 15_000          # Allows at what point 3D Gaussians are allowed to increase density up until what point  
-        self.densify_until_iter = 20_000            # Allows at what point 3D Gaussians are allowed to increase density up until what point  
-        # self.densify_grad_threshold = 0.0002      # Essentially 3D Gaussian Density
-        self.densify_grad_threshold = 0.0001        # Essentially 3D Gaussian Density
+        # self.densify_until_iter = 15_000                  # Allows at what point 3D Gaussians are allowed to increase density up until what point  
+        self.densify_until_iter = int(self.iterations - (self.iterations/4))         # Allows at what point 3D Gaussians are allowed to increase density up until what point  
+        self.densify_grad_threshold = 0.0002                # Essentially 3D Gaussian Density
+        # self.densify_grad_threshold = 0.0001              # Essentially 3D Gaussian Density
         super().__init__(parser, "Optimization Parameters")
 
 def get_combined_args(parser : ArgumentParser):

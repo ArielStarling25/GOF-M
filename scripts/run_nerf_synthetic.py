@@ -6,12 +6,12 @@ import time
 import itertools
 from pathlib import Path
 
-scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
+# scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
 # scenes = ["lego"]
-# scenes = ['lego', 'materials', 'drums', 'ficus']
+# scenes = ["mic","drums", "ficus", "hotdog", "lego", "materials", "chair"]
 # scenes = ["materials"]
 # scenes = ['hotdog', 'lego', 'materials', 'drums', 'ficus', 'drums']
-# scenes = ['hotdog']
+scenes = ['hotdog']
 
 factors = [1]
 
@@ -21,7 +21,7 @@ dataset_dir = "nerf_synthetic"
 
 dry_run = False
 
-set_iterations = 30000
+set_iterations = 10000
 
 excluded_gpus = set([])
 
