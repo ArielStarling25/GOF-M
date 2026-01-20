@@ -8,10 +8,10 @@ from pathlib import Path
 
 # scenes = ["ship", "drums", "ficus", "hotdog", "lego", "materials", "mic", "chair"]
 # scenes = ["lego"]
-# scenes = ["mic","drums", "ficus", "hotdog", "lego", "materials", "chair"]
+scenes = ["mic", "drums", "ficus", "hotdog", "lego", "materials", "chair"]
 # scenes = ["materials"]
 # scenes = ['hotdog', 'lego', 'materials', 'drums', 'ficus', 'drums']
-scenes = ['hotdog']
+# scenes = ['hotdog']
 
 factors = [1]
 
@@ -21,7 +21,7 @@ dataset_dir = "nerf_synthetic"
 
 dry_run = False
 
-set_iterations = 10000
+set_iterations = 15000
 
 excluded_gpus = set([])
 
@@ -56,14 +56,12 @@ def train_scene(gpu, scene, factor):
         os.system(cmd)
     
     return True
-
     
 def worker(gpu, scene, factor):
     print(f"Starting job on GPU {gpu} with scene {scene}\n")
     train_scene(gpu, scene, factor)
     print(f"Finished job on GPU {gpu} with scene {scene}\n")
     # This worker function starts a job and returns when it's done.
-    
     
 def dispatch_jobs(jobs, executor):
     future_to_job = {}

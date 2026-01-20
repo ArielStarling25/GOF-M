@@ -5,7 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
 
-training_list = ['Barn', 'Caterpillar', 'Courthouse', 'Ignatius', 'Meetingroom', 'Truck']
+# training_list = ['Barn', 'Caterpillar', 'Courthouse', 'Ignatius', 'Meetingroom', 'Truck']
+training_list = ['Ignatius']
 # training_list = ['Truck', 'Panther']
 
 split = "TrainingSet"
@@ -19,7 +20,7 @@ output_dir = "exp_TNT/release"
 
 dry_run = False
 
-set_iterations = 30000
+set_iterations = 20000
 
 jobs = list(zip(scenes, factors))
 

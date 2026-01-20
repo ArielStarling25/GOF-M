@@ -12,6 +12,10 @@ import numpy as np
 import trimesh
 from tetranerf.utils.extension import cpp
 from utils.tetmesh import marching_tetrahedra
+from datetime import datetime
+
+def get_current_timestamp():
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 @torch.no_grad()
 def evaluage_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=False):
@@ -117,7 +121,7 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
             mesh.update_vertices(mask)
             mesh.update_faces(face_mask)
         
-        mesh.export(os.path.join(render_path, f"mesh_binary_search_{step}.ply"))
+        mesh.export(os.path.join(render_path, f"mesh_binary_search_{step}_{get_current_timestamp()}.ply")) # TODO: Find a way to make a unique naming based on date and time
 
     # linear interpolation
     # right_sdf *= -1

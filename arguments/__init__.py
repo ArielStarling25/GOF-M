@@ -81,7 +81,7 @@ class PipelineParams(ParamGroup):
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
         # self.iterations = 30_000                          # Training Iterations   
-        self.iterations = 15_000 #                          # Training Iterations
+        self.iterations = 20_000 #                          # Training Iterations
         # self.position_lr_init = 0.00016                   # Increasing this parameter risks instability
         self.position_lr_init = 0.00016                     # Increasing this parameter risks instability
         self.position_lr_final = 0.0000016
@@ -105,7 +105,7 @@ class OptimizationParams(ParamGroup):
         self.opacity_reset_interval = 3000
         self.densify_from_iter = 500
         # self.densify_until_iter = 15_000                  # Allows at what point 3D Gaussians are allowed to increase density up until what point  
-        self.densify_until_iter = int(self.iterations - (self.iterations/4))         # Allows at what point 3D Gaussians are allowed to increase density up until what point  
+        self.densify_until_iter = int(self.iterations - (self.iterations/3))         # Allows at what point 3D Gaussians are allowed to increase density up until what point  
         self.densify_grad_threshold = 0.0002                # Essentially 3D Gaussian Density
         # self.densify_grad_threshold = 0.0001              # Essentially 3D Gaussian Density
         super().__init__(parser, "Optimization Parameters")
