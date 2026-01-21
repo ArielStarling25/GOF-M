@@ -2,7 +2,7 @@
 
 # Check if an argument is provided
 if [ -z "$1" ]; then
-    echo "Usage: ./run [dtu|mip|nerf|tnt]"
+    echo "Usage: ./run.sh [dtu|mip|nerf|tnt]"
     exit 1
 fi
 

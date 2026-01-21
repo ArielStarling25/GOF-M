@@ -7,7 +7,8 @@ import time
 from pathlib import Path
 
 # scenes = [24, 37, 40, 55, 63, 65, 69, 83, 97, 105, 106, 110, 114, 118, 122]
-scenes = [24]
+# scenes = [24]
+scenes = [97, 110, 114]
 
 factors = [2] * len(scenes)
 
@@ -15,7 +16,7 @@ excluded_gpus = set([])
 
 output_dir = "exp_dtu/release"
 
-set_iterations = 1000
+set_iterations = 20000
 
 dataset_dir = "dtu"
 
