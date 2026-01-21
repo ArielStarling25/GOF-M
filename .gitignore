@@ -39,3 +39,4 @@ __pycache__
 datasets/*
 !datasets/placeholder.txt
 
+custom_datasets/*
