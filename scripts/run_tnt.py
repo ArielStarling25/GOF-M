@@ -6,10 +6,11 @@ import time
 from pathlib import Path
 
 # training_list = ['Barn', 'Caterpillar', 'Courthouse', 'Ignatius', 'Meetingroom', 'Truck']
-training_list = ['Ignatius']
+# training_list = ['Ignatius']
+training_list = ['Panther']
 # training_list = ['Truck', 'Panther']
 
-split = "TrainingSet"
+# split = "TrainingSet"
 scenes = training_list
 
 factors = [2] * len(scenes)
@@ -20,7 +21,7 @@ output_dir = "exp_TNT/release"
 
 dry_run = False
 
-set_iterations = 20000
+set_iterations = 2000
 
 jobs = list(zip(scenes, factors))
 
@@ -28,7 +29,8 @@ def train_scene(gpu, scene, factor):
     current_file_path = Path(__file__).resolve()
     scripts_dir = current_file_path.parent
     project_root = scripts_dir.parent
-    dataset_path = os.path.join(project_root, "datasets", "tanks_n_temples", "TNT_GOF", "TrainingSet", scene)
+    # dataset_path = os.path.join(project_root, "datasets", "tanks_n_temples", "TNT_GOF", "TrainingSet", scene)
+    dataset_path = os.path.join(project_root, "datasets", "custom", scene)
     print("Dataset Path set to: ", dataset_path)
 
     cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -r {factor} --use_decoupled_appearance"
@@ -36,18 +38,30 @@ def train_scene(gpu, scene, factor):
     if not dry_run:
         os.system(cmd)
 
-    # fusion
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 render.py -m {output_dir}/{scene} --skip_train"
+    print(cmd)
+    if not dry_run:
+        os.system(cmd)
+
+    #fusion
     cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration {set_iterations} --texture_mesh"
+    print(cmd)
+    if not dry_run:
+        os.system(cmd)
+
+    #tsdf fusion
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh_tsdf.py -m {output_dir}/{scene} --iteration {set_iterations}"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
     # evaluation
     # You need to install open3d==0.9 for evaluation
-    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 eval_tnt/run.py --dataset-dir eval_tnt/TrainingSet/{scene} --traj-path TNT_GOF/TrainingSet/{scene}/{scene}_COLMAP_SfM.log --ply-path {output_dir}/{scene}/test/ours_30000/fusion/mesh_binary_search_7.ply"
-    print(cmd)
-    if not dry_run:
-        os.system(cmd)
+    # Main issue with TNT is that it takes up way too much memory to store
+    # cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 eval_tnt/run.py --dataset-dir eval_tnt/TrainingSet/{scene} --traj-path TNT_GOF/TrainingSet/{scene}/{scene}_COLMAP_SfM.log --ply-path {output_dir}/{scene}/test/ours_{set_iterations}/fusion/mesh_binary_search_7.ply"
+    # print(cmd)
+    # if not dry_run:
+    #     os.system(cmd)
 
     return True
 

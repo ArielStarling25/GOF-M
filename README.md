@@ -72,23 +72,29 @@ Please download the Mip-NeRF 360 dataset from the [official webiste](https://jon
 
 > An Updated and simplified README is still a work in progress...
 
-- Mip-NeRF 360
+- **Mip-NeRF 360**
   - [Official Website](https://jonbarron.info/mipnerf360/)
   - Download either '[Dataset Pt.1](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip)' or '[Dataset Pt.2](https://storage.googleapis.com/gresearch/refraw360/360_extra_scenes.zip)'
   - Place downloaded and extracted dataset into '/datasets'
   - Adjust the available scenes accordingly within the 'run_mipnerf360.py' script
-- NeRF-Synthetic
+- **NeRF-Synthetic**
   - [Official Release](https://github.com/bmild/nerf) 
   - Download [Dataset](https://drive.google.com/file/d/1OsiBs2udl32-1CqTXCitmov4NQCYdA9g/view?usp=drive_link)
   - Place downloaded and extracted dataset into '/datasets'
   - Adjust the available scenes accordingly within the 'run_nerf_synthetic.py' script
-- DTU Dataset
+- **DTU Dataset**
   - Download [Dataset](https://drive.google.com/file/d/1ODiOu72tAGPTnhVn0cFZ9MvymDgcoHxQ/view?usp=drive_link)
   - Place downloaded and extracted dataset into '/datasets'
+  - Adjust the available scenes accordingly within the 'run_dtu.py' script
   - WIP: Add evaluation dataset
-- Tanks and Temples (TNT)
+- **Tanks and Temples (TNT)**
   - Download [Dataset](https://huggingface.co/datasets/ZehaoYu/gaussian-opacity-fields/blob/main/TNT_GOF.zip)
   - Place downloaded and extracted dataset into '/datasets'
+  - Adjust the available scenes accordingly within the 'run_tnt.py' script
+- **Custom datasets**
+  - Following the same format from 3DGS
+  - Refer to [Link](https://github.com/graphdeco-inria/gaussian-splatting?tab=readme-ov-file#processing-your-own-scenes)
+  - Note: when using `train.py` the `--use_decoupled_appearance` flag is to enable decoupled appearance modelling if the provided image set has inconsistent lighting conditions
 
 # Training and Evaluation
 ```
@@ -107,7 +113,7 @@ python scripts/run_tnt.py
 python scripts/run_dtu.py
 ```
 
-# Custom Dataset
+<!-- # Custom Dataset
 We use the same data format from 3DGS, please follow [here](https://github.com/graphdeco-inria/gaussian-splatting?tab=readme-ov-file#processing-your-own-scenes) to prepare the your dataset. Then you can train your model and extract a mesh (we use the Tanks and Temples dataset for example)
 ```
 # training
@@ -120,7 +126,7 @@ python extract_mesh.py -m exp_TNT/Caterpillar --iteration 30000
 
 # you can open extracted mesh with meshlab or using the following script based on open3d
 python mesh_viewer.py exp_TNT/Caterpillar/test/ours_30000/fusion/mesh_binary_search_7.ply
-```
+``` -->
 
 # Acknowledgements
 This project is built upon [3DGS](https://github.com/graphdeco-inria/gaussian-splatting) and [Mip-Splatting](https://github.com/autonomousvision/mip-splatting). Regularizations and some visualizations are taken from [2DGS](https://surfsplatting.github.io/). Tetrahedra triangulation is taken from [Tetra-NeRF](https://github.com/jkulhanek/tetra-nerf). Marching Tetrahdedra is adapted from [Kaolin](https://github.com/NVIDIAGameWorks/kaolin/blob/master/kaolin/ops/conversions/tetmesh.py) Library. Evaluation scripts for DTU and Tanks and Temples dataset are taken from [DTUeval-python](https://github.com/jzhangbs/DTUeval-python) and [TanksAndTemples](https://github.com/isl-org/TanksAndTemples/tree/master/python_toolbox/evaluation) respectively. We thank all the authors for their great work and repos. 

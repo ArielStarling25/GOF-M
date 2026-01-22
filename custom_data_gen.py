@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
 
+# Current implementation is focused only on COLMAP-based data
 # NOTE: Current implementation is for windows environment, not linux
 
 DRY_RUN = False
