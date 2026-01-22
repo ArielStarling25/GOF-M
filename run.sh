@@ -2,7 +2,7 @@
 
 # Check if an argument is provided
 if [ -z "$1" ]; then
-    echo "Usage: ./run.sh [dtu|mip|nerf|tnt]"
+    echo "Usage: ./run.sh [dtu|mip|nerf|tnt|custom]"
     exit 1
 fi
 
@@ -26,9 +26,13 @@ case $DATASET in
         echo "Starting Tanks & Temples run..."
         python3 scripts/run_tnt.py  
         ;;
+    "custom")
+        echo "Starting Custom Dataset run..."
+        python3 scripts/run_custom.py  
+        ;;
     *)
         echo "Error: Invalid argument '$DATASET'."
-        echo "Please use one of: dtu, mip, nerf, tnt"
+        echo "Please use one of: dtu, mip, nerf, tnt, custom"
         exit 1
         ;;
 esac

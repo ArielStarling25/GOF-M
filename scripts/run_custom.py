@@ -5,10 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
 
-# training_list = ['Barn', 'Caterpillar', 'Courthouse', 'Ignatius', 'Meetingroom', 'Truck']
-# training_list = ['Ignatius']
 training_list = ['Panther']
-# training_list = ['Truck', 'Panther']
 
 # split = "TrainingSet"
 scenes = training_list
@@ -17,7 +14,7 @@ factors = [2] * len(scenes)
 
 excluded_gpus = set([])
 
-output_dir = "exp_TNT/release"
+output_dir = "exp_Custom/release"
 
 dry_run = False
 
@@ -29,8 +26,7 @@ def train_scene(gpu, scene, factor):
     current_file_path = Path(__file__).resolve()
     scripts_dir = current_file_path.parent
     project_root = scripts_dir.parent
-    dataset_path = os.path.join(project_root, "datasets", "tanks_n_temples", "TNT_GOF", "TrainingSet", scene)
-    # dataset_path = os.path.join(project_root, "datasets", "custom", scene)
+    dataset_path = os.path.join(project_root, "datasets", "custom", scene)
     print("Dataset Path set to: ", dataset_path)
 
     cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -r {factor} --use_decoupled_appearance"
