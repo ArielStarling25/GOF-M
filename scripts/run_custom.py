@@ -29,7 +29,7 @@ def train_scene(gpu, scene, factor):
     dataset_path = os.path.join(project_root, "datasets", "custom", scene)
     print("Dataset Path set to: ", dataset_path)
 
-    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -r {factor} --use_decoupled_appearance"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} --use_decoupled_appearance"
     print(cmd)
     if not dry_run:
         os.system(cmd)
