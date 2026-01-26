@@ -5,7 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
 
-training_list = ['Panther']
+# training_list = ['Panther']
+training_list = ['Figurine']
 
 # split = "TrainingSet"
 scenes = training_list
@@ -18,11 +19,11 @@ output_dir = "exp_Custom/release"
 
 dry_run = False
 
-set_iterations = 10000
+set_iterations = 30000
 
 jobs = list(zip(scenes, factors))
 
-def train_scene(gpu, scene, factor):
+def train_scene(gpu, scene, factor=None):
     current_file_path = Path(__file__).resolve()
     scripts_dir = current_file_path.parent
     project_root = scripts_dir.parent
@@ -30,6 +31,8 @@ def train_scene(gpu, scene, factor):
     print("Dataset Path set to: ", dataset_path)
 
     cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} --use_decoupled_appearance"
+    if factor == 0:
+        cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images --use_decoupled_appearance"
     print(cmd)
     if not dry_run:
         os.system(cmd)
@@ -41,6 +44,11 @@ def train_scene(gpu, scene, factor):
 
     #fusion
     cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration {set_iterations} --texture_mesh"
+    print(cmd)
+    if not dry_run:
+        os.system(cmd)
+
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 metrics.py -m {output_dir}/{scene}"
     print(cmd)
     if not dry_run:
         os.system(cmd)
@@ -99,7 +107,6 @@ def dispatch_jobs(jobs, executor):
         time.sleep(5)
         
     print("All jobs have been processed.")
-
 
 # Using ThreadPoolExecutor to manage the thread pool
 with ThreadPoolExecutor(max_workers=8) as executor:

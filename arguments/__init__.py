@@ -81,7 +81,7 @@ class PipelineParams(ParamGroup):
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
         # self.iterations = 30_000                          # Training Iterations   
-        self.iterations = 20_000 #                          # Training Iterations
+        self.iterations = 30_000 #                          # Training Iterations
         # self.position_lr_init = 0.00016                   # Increasing this parameter risks instability
         self.position_lr_init = 0.00016                     # Increasing this parameter risks instability
         self.position_lr_final = 0.0000016
