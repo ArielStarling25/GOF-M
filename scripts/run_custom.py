@@ -6,18 +6,20 @@ import time
 from pathlib import Path
 
 # training_list = ['Panther']
-training_list = ['Figurine']
+# training_list = ['Figurine']
+training_list = ['Hilux']
 
 # split = "TrainingSet"
 scenes = training_list
 
-factors = [2] * len(scenes)
+factors = [0] * len(scenes)
 
 excluded_gpus = set([])
 
 output_dir = "exp_Custom/release"
 
 dry_run = False
+RESULTS_ONLY = False
 
 set_iterations = 30000
 
@@ -30,31 +32,32 @@ def train_scene(gpu, scene, factor=None):
     dataset_path = os.path.join(project_root, "datasets", "custom", scene)
     print("Dataset Path set to: ", dataset_path)
 
-    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} --use_decoupled_appearance"
-    if factor == 0:
-        cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images --use_decoupled_appearance"
-    print(cmd)
-    if not dry_run:
-        os.system(cmd)
+    if not RESULTS_ONLY:
+        cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} --use_decoupled_appearance"
+        if factor == 0:
+            cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images --use_decoupled_appearance"
+        print(cmd)
+        if not dry_run:
+            os.system(cmd)
 
-    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 render.py -m {output_dir}/{scene} --skip_train"
-    print(cmd)
-    if not dry_run:
-        os.system(cmd)
+        cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 render.py -m {output_dir}/{scene} --skip_train"
+        print(cmd)
+        if not dry_run:
+            os.system(cmd)
 
-    #fusion
-    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration {set_iterations} --texture_mesh"
-    print(cmd)
-    if not dry_run:
-        os.system(cmd)
+        #fusion
+        cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration {set_iterations} --texture_mesh"
+        print(cmd)
+        if not dry_run:
+            os.system(cmd)
+
+        #tsdf fusion
+        cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh_tsdf.py -m {output_dir}/{scene} --iteration {set_iterations}"
+        print(cmd)
+        if not dry_run:
+            os.system(cmd)
 
     cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 metrics.py -m {output_dir}/{scene}"
-    print(cmd)
-    if not dry_run:
-        os.system(cmd)
-
-    #tsdf fusion
-    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh_tsdf.py -m {output_dir}/{scene} --iteration {set_iterations}"
     print(cmd)
     if not dry_run:
         os.system(cmd)

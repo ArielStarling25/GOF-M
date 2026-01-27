@@ -105,8 +105,8 @@ class OptimizationParams(ParamGroup):
         self.opacity_reset_interval = 3000
         self.densify_from_iter = 500
         # self.densify_until_iter = 15_000                  # Allows at what point 3D Gaussians are allowed to increase density up until what point  
-        self.densify_until_iter = int(self.iterations - (self.iterations/3))         # Allows at what point 3D Gaussians are allowed to increase density up until what point  
-        self.densify_grad_threshold = 0.0002                # Essentially 3D Gaussian Density
+        self.densify_until_iter = int(self.iterations - (self.iterations/2))         # Allows at what point 3D Gaussians are allowed to increase density up until what point  
+        self.densify_grad_threshold = 0.0001                # Essentially 3D Gaussian Density
         # self.densify_grad_threshold = 0.0001              # Essentially 3D Gaussian Density
         super().__init__(parser, "Optimization Parameters")
 

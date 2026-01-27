@@ -21,7 +21,7 @@ output_dir = "exp_TNT/release"
 
 dry_run = False
 
-set_iterations = 10000
+set_iterations = 30000
 
 jobs = list(zip(scenes, factors))
 

@@ -86,7 +86,7 @@ Please download the Mip-NeRF 360 dataset from the [official webiste](https://jon
   - Download [Dataset](https://drive.google.com/file/d/1ODiOu72tAGPTnhVn0cFZ9MvymDgcoHxQ/view?usp=drive_link)
   - Place downloaded and extracted dataset into '/datasets'
   - Adjust the available scenes accordingly within the 'run_dtu.py' script
-  - WIP: Add evaluation dataset
+  - Download [Evaluation_Dataset]() and place in `/dtu_eval/Official_DTU_Dataset`
 - **Tanks and Temples (TNT)**
   - Download [Dataset](https://huggingface.co/datasets/ZehaoYu/gaussian-opacity-fields/blob/main/TNT_GOF.zip)
   - Place downloaded and extracted dataset into '/datasets'
