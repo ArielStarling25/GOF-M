@@ -3,6 +3,8 @@ import sys
 import os
 import numpy as np
 
+# I guess this one needs to be run on windows
+
 def load_and_show_ply2(filepath):
     # Load the PLY file
     #mesh = o3d.io.read_point_cloud(filepath)
