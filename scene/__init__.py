@@ -42,7 +42,7 @@ class Scene:
 
         # ===== New - For Mask Integration =====
 
-        if os.path.exists(os.path.join(args._source_path, "mask")) or os.path.exists(os.path.join(args._source_path, "masks")):
+        if os.path.exists(os.path.join(args.source_path, "mask")) or os.path.exists(os.path.join(args.source_path, "masks")):
             print("Found masks file, assuming object reconstruction!")
         else:
             print("Could not find masks file... Assuming whole scene reconstruction...")
