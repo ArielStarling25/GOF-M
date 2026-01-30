@@ -117,8 +117,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             highresolution_index.append(index)
 
     gaussians.compute_3D_filter(cameras=trainCameras)
-
     viewpoint_stack = None
+    if not viewpoint_stack:
+        viewpoint_stack = scene.getTrainCameras().copy()
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
@@ -136,8 +137,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         et_oush = time.perf_counter()                               # ====== TIMER =======
 
         # Pick a random Camera
-        if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras().copy()
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         
         # Pick a random high resolution camera
@@ -161,6 +160,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # rgb Loss
         gt_image = viewpoint_cam.original_image.cuda()
+
+        gt_mask = viewpoint_cam.gt_alpha_mask.cuda()
 
         et_rgbL = time.perf_counter()                                # ====== TIMER ======
 

@@ -34,6 +34,7 @@ class CameraInfo(NamedTuple):
     image_name: str
     width: int
     height: int
+    mask: np.array = None # <--- NEW: Store the mask here
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -41,6 +42,35 @@ class SceneInfo(NamedTuple):
     test_cameras: list
     nerf_normalization: dict
     ply_path: str
+
+def load_mask_from_path(base_path, image_name, extension=".png"):
+    """
+    Tries to load a mask from 'mask' or 'masks' folders with the suffix '_mask'.
+    Returns the mask as a normalized numpy array (0.0 - 1.0) or None if not found.
+    """
+    mask_dirs = ["mask", "masks"]
+    # Construct the expected mask filename: image_name + "_mask" + extension
+    # e.g., "0001" -> "0001_mask.png"
+    mask_filename = f"{image_name}_mask{extension}"
+    
+    found_mask_path = None
+    for d in mask_dirs:
+        possible_path = os.path.join(base_path, d, mask_filename)
+        if os.path.exists(possible_path):
+            found_mask_path = possible_path
+            break
+            
+    if found_mask_path:
+        # Load mask, convert to grayscale
+        mask = Image.open(found_mask_path).convert('L')
+        mask = np.array(mask) / 255.0
+        mask = np.where(mask > 0.5, 1.0, 0.0)
+        
+        # Expand dims to match image channels if necessary later (H, W, 1)
+        mask = mask[..., None] 
+        return mask
+        
+    return None
 
 def getNerfppNorm(cam_info):
     def get_center_and_diag(cam_centers):
@@ -67,6 +97,7 @@ def getNerfppNorm(cam_info):
 
 def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     cam_infos = []
+    base_path = os.path.dirname(images_folder.rstrip(os.path.sep))
     for idx, key in enumerate(cam_extrinsics):
         sys.stdout.write('\r')
         # the exact output you're looking for:
@@ -96,15 +127,17 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
 
         image_path = os.path.join(images_folder, os.path.basename(extr.name))
         image_name = os.path.basename(image_path).split(".")[0]
+        extension = os.path.splitext(image_path)[1]
         
         if not os.path.exists(image_path) or "sky_mask" in image_path:
             print("skip =====", image_path)
             continue
         
         image = Image.open(image_path)
+        mask = load_mask_from_path(base_path, image_name, extension) # Mask loading as np.array
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                              image_path=image_path, image_name=image_name, width=width, height=height)
+                              image_path=image_path, image_name=image_name, width=width, height=height, mask=mask)
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos
@@ -218,8 +251,10 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             FovY = fovy 
             FovX = fovx
 
+            mask = load_mask_from_path(path, image_name, extension)
+
             cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+                            image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1], mask=mask))
             
     return cam_infos
 
@@ -274,6 +309,7 @@ def readMultiScale(path, white_background,split, only_highres=False):
             continue
         image_path = os.path.join(path, relative_path)
         image_name = Path(image_path).stem
+        extension = os.path.splitext(image_path)[1]
         
         # NeRF 'transform_matrix' is a camera-to-world transform
         c2w = meta["cam2world"][idx]
@@ -300,8 +336,10 @@ def readMultiScale(path, white_background,split, only_highres=False):
         FovY = fovy 
         FovX = fovx
 
+        mask = load_mask_from_path(path, image_name, extension)
+
         cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                        image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+                        image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1], mask=mask))
     return cam_infos
 
 

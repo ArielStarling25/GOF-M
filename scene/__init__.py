@@ -40,6 +40,15 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
 
+        # ===== New - For Mask Integration =====
+
+        if os.path.exists(os.path.join(args._source_path, "mask")) or os.path.exists(os.path.join(args._source_path, "masks")):
+            print("Found masks file, assuming object reconstruction!")
+        else:
+            print("Could not find masks file... Assuming whole scene reconstruction...")
+
+        # ===== New - For Mask Integration =====
+
         if os.path.exists(os.path.join(args.source_path, "sparse")):
             print("Found sparse file, assuming COLMAP!")
             scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval)
