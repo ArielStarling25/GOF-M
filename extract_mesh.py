@@ -18,7 +18,7 @@ def get_current_timestamp():
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 @torch.no_grad()
-def evaluage_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=False):
+def evaluate_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=False):
     final_alpha = torch.ones((points.shape[0]), dtype=torch.float32, device="cuda")
     if return_color:
         final_color = torch.ones((points.shape[0], 3), dtype=torch.float32, device="cuda")
@@ -57,7 +57,7 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
         torch.save(cells, os.path.join(render_path, "cells.pt"))
     
     # evaluate alpha
-    alpha = evaluage_alpha(points, views, gaussians, pipeline, background, kernel_size)
+    alpha = evaluate_alpha(points, views, gaussians, pipeline, background, kernel_size)
 
     vertices = points.cuda()[None]
     tets = cells.cuda().long()
@@ -93,7 +93,7 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
     for step in range(n_binary_steps):
         print("binary search in step {}".format(step))
         mid_points = (left_points + right_points) / 2
-        alpha = evaluage_alpha(mid_points, views, gaussians, pipeline, background, kernel_size)
+        alpha = evaluate_alpha(mid_points, views, gaussians, pipeline, background, kernel_size)
         mid_sdf = alpha_to_sdf(alpha).squeeze().unsqueeze(-1)
         
         ind_low = ((mid_sdf < 0) & (left_sdf < 0)) | ((mid_sdf > 0) & (left_sdf > 0))
@@ -108,7 +108,7 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
             continue
         
         if texture_mesh:
-            _, color = evaluage_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=True)
+            _, color = evaluate_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=True)
             vertex_colors=(color.cpu().numpy() * 255).astype(np.uint8)
         else:
             vertex_colors=None
@@ -128,7 +128,6 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
     # points = (left_points * left_sdf + right_points * right_sdf) / (left_sdf + right_sdf)
     # mesh = trimesh.Trimesh(vertices=points.cpu().numpy(), faces=faces)
     # mesh.export(os.path.join(render_path, f"mesh_binary_search_interp.ply"))
-    
 
 def extract_mesh(dataset : ModelParams, iteration : int, pipeline : PipelineParams, filter_mesh : bool, texture_mesh : bool, near : float, far : float):
     with torch.no_grad():
