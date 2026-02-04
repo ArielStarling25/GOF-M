@@ -34,7 +34,7 @@ class CameraInfo(NamedTuple):
     image_name: str
     width: int
     height: int
-    mask: np.array = None # <--- NEW: Store the mask here
+    mask: np.array = None # NEW
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
