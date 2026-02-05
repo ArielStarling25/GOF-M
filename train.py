@@ -138,7 +138,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        
+        # print(scene.getTrainCameras().copy())
         # Pick a random high resolution camera
         if random.random() < 0.3 and dataset.sample_more_highres:
             viewpoint_cam = trainCameras[highresolution_index[randint(0, len(highresolution_index)-1)]]
@@ -161,7 +161,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # rgb Loss
         gt_image = viewpoint_cam.original_image.cuda()
 
-        gt_mask = viewpoint_cam.gt_alpha_mask.cuda()
+        # gt_mask = viewpoint_cam.gt_alpha_mask.cuda()
 
         et_rgbL = time.perf_counter()                                # ====== TIMER ======
 

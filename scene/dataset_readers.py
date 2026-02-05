@@ -52,24 +52,21 @@ def load_mask_from_path(base_path, image_name, extension=".png"):
     # Construct the expected mask filename: image_name + "_mask" + extension
     # e.g., "0001" -> "0001_mask.png"
     mask_filename = f"{image_name}_mask{extension}"
-    
     found_mask_path = None
     for d in mask_dirs:
         possible_path = os.path.join(base_path, d, mask_filename)
         if os.path.exists(possible_path):
             found_mask_path = possible_path
             break
-            
     if found_mask_path:
-        # Load mask, convert to grayscale
         mask = Image.open(found_mask_path).convert('L')
         mask = np.array(mask) / 255.0
         mask = np.where(mask > 0.5, 1.0, 0.0)
-        
         # Expand dims to match image channels if necessary later (H, W, 1)
         mask = mask[..., None] 
+        print(f" [INFO] loaded mask {found_mask_path} in dataset loader")
         return mask
-        
+    print(" [INFO] No mask found")
     return None
 
 def getNerfppNorm(cam_info):
@@ -134,7 +131,7 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
             continue
         
         image = Image.open(image_path)
-        mask = load_mask_from_path(base_path, image_name, extension) # Mask loading as np.array
+        mask = load_mask_from_path(base_path, image_name) # Mask loading as np.array
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=width, height=height, mask=mask)

@@ -21,7 +21,7 @@ dataset_dir = "nerf_synthetic"
 
 dry_run = False
 
-set_iterations = 15000
+set_iterations = 5000
 
 excluded_gpus = set([])
 

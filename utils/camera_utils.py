@@ -53,12 +53,65 @@ def loadCam(args, id, cam_info, resolution_scale):
                   image=gt_image, gt_alpha_mask=loaded_mask,
                   image_name=cam_info.image_name, uid=id, data_device=args.data_device)
 
+def loadCam2(args, id, cam_info, resolution_scale):
+    orig_w, orig_h = cam_info.image.size
+    if args.resolution in [1, 2, 4, 8, 16, 32, 64]:
+        resolution = round(orig_w/(resolution_scale * args.resolution)), round(orig_h/(resolution_scale * args.resolution))
+    else:  # should be a type that converts to float
+        if args.resolution == -1:
+            if orig_w > 1600:
+                global WARNED
+                if not WARNED:
+                    print("[ INFO ] Encountered quite large input images (>1.6K pixels width), rescaling to 1.6K.\n "
+                        "If this is not desired, please explicitly specify '--resolution/-r' as 1")
+                    WARNED = True
+                global_down = orig_w / 1600
+            else:
+                global_down = 1
+        else:
+            global_down = orig_w / args.resolution
+
+        scale = float(global_down) * float(resolution_scale)
+        resolution = (int(orig_w / scale), int(orig_h / scale))
+
+    # Check if we loaded an external mask in the dataset reader
+    if getattr(cam_info, 'mask', None) is not None:
+        resized_image_rgb = PILtoTorch(cam_info.image, resolution)
+        # Resize the external mask to match the image resolution
+        # We use PILtoTorch logic but for the numpy mask we stored
+        import torch
+        from PIL import Image
+        # Convert numpy mask back to PIL for consistent resizing if needed, 
+        # or use torch.nn.functional.interpolate if it's already a tensor.
+        # Assuming cam_info.mask is the numpy array we loaded earlier:
+        mask_pil = Image.fromarray((cam_info.mask.squeeze() * 255).astype(np.uint8), mode='L')
+        loaded_mask = PILtoTorch(mask_pil, resolution)
+        gt_image = resized_image_rgb
+        print("[INFO] Loaded mask from dataset reader into memory!")
+    # Legacy Method: Check for embedded Alpha channel (Original method)
+    elif len(cam_info.image.split()) > 3:
+        import torch
+        resized_image_rgb = torch.cat([PILtoTorch(im, resolution) for im in cam_info.image.split()[:3]], dim=0)
+        loaded_mask = PILtoTorch(cam_info.image.split()[3], resolution)
+        gt_image = resized_image_rgb
+        print("[INFO] Loaded mask from embedded image into memory!")
+    else:
+        resized_image_rgb = PILtoTorch(cam_info.image, resolution)
+        loaded_mask = None
+        gt_image = resized_image_rgb
+        print("[INFO] No Mask to load into memory!")
+
+    return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
+                  FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
+                  image=gt_image, gt_alpha_mask=loaded_mask,
+                  image_name=cam_info.image_name, uid=id, data_device=args.data_device)
+
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):
     camera_list = []
-
     for id, c in enumerate(cam_infos):
-        camera_list.append(loadCam(args, id, c, resolution_scale))
-
+        item = loadCam2(args, id, c, resolution_scale)
+        # print(item)
+        camera_list.append(item)
     return camera_list
 
 def camera_to_JSON(id, camera : Camera):

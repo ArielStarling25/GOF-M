@@ -21,6 +21,7 @@ output_dir = "exp_Custom/release"
 dry_run = False
 RESULTS_ONLY = False
 SEGMENTED = True
+MESH_EXTRACT_ONLY = True
 
 set_iterations = 5000
 
@@ -34,14 +35,15 @@ def train_scene(gpu, scene, factor=None):
     print("Dataset Path set to: ", dataset_path)
 
     if not RESULTS_ONLY:
-        cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} -r {factor} --use_decoupled_appearance"
-        if factor == 0:
-            cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images -r 1 --use_decoupled_appearance"
-        if SEGMENTED:
-            cmd += " --lambda_distortion 1000"
-        print(cmd)
-        if not dry_run:
-            os.system(cmd)
+        if not MESH_EXTRACT_ONLY:
+            cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} -r {factor} --use_decoupled_appearance"
+            if factor == 0:
+                cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images -r 1 --use_decoupled_appearance"
+            if SEGMENTED:
+                cmd += " --lambda_distortion 1000"
+            print(cmd)
+            if not dry_run:
+                os.system(cmd)
 
         cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 render.py -m {output_dir}/{scene} --skip_train"
         print(cmd)
