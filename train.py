@@ -121,6 +121,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
+    gt_mask_exists = False
     for iteration in range(first_iter, opt.iterations + 1):        
         iter_start.record()
 
@@ -155,6 +156,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         et_ren = time.perf_counter()                               # ====== TIMER =======
 
         image = rendering[:3, :, :]
+        # Extract Rendered Opacity
+        render_alpha = rendering[7, :, :]
         
         st_rgbL = time.perf_counter()                                # ====== TIMER =======
 
@@ -162,6 +165,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         gt_image = viewpoint_cam.original_image.cuda()
 
         # gt_mask = viewpoint_cam.gt_alpha_mask.cuda()
+        gt_mask = None
+        try:
+            gt_mask = viewpoint_cam.gt_alpha_mask.cuda().squeeze()
+            gt_mask_exists = True
+        except Exception as e:
+            gt_mask_exists = False
+            print(f"[WARN] No mask detected | {e}")
+
+        if gt_mask_exists:
+            image = image * gt_mask
+            gt_image = gt_image * gt_mask
 
         et_rgbL = time.perf_counter()                                # ====== TIMER ======
 
@@ -178,11 +192,21 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         rgb_loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         
+        mask_loss = None
+        lambda_mask = None
+        if gt_mask_exists:
+            mask_loss = l1_loss(render_alpha, gt_mask)
+            # Define a weight for this loss (Hyperparameter)
+            # 0.1 is a good starting point, increase to 1.0 if background noise persists
+            lambda_mask = 0.1
+
         # depth distortion regularization
         distortion_map = rendering[8, :, :]
         # edge aware regularization is not really helpful so we disable it
         # distortion_map = get_edge_aware_distortion_map(gt_image, distortion_map)
         distortion_loss = distortion_map.mean()
+        if gt_mask_exists:
+            distortion_loss = (distortion_map * gt_mask).sum() / (gt_mask.sum() + 1e-6)
         
         st_dn = time.perf_counter()                                # ====== TIMER ======
 
@@ -210,6 +234,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         normal_error = 1 - (render_normal_world * depth_normal).sum(dim=0)
         depth_normal_loss = normal_error.mean()
+        if gt_mask_exists:
+            depth_normal_loss = (normal_error * gt_mask).sum() / (gt_mask.sum() + 1e-6)
         
         lambda_distortion = opt.lambda_distortion if iteration >= opt.distortion_from_iter else 0.0
         lambda_depth_normal = opt.lambda_depth_normal if iteration >= opt.depth_normal_from_iter else 0.0
@@ -217,6 +243,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         st_fl = time.perf_counter()                                # ====== TIMER ======
         # Final loss
         loss = rgb_loss + depth_normal_loss * lambda_depth_normal + distortion_loss * lambda_distortion
+        if gt_mask_exists:
+            loss = rgb_loss + (depth_normal_loss * lambda_depth_normal) + (distortion_loss * lambda_distortion) + (mask_loss * lambda_mask)
         loss.backward()
         et_fl = time.perf_counter()                                # ====== TIMER ======
 

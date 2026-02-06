@@ -64,7 +64,7 @@ def load_mask_from_path(base_path, image_name, extension=".png"):
         mask = np.where(mask > 0.5, 1.0, 0.0)
         # Expand dims to match image channels if necessary later (H, W, 1)
         mask = mask[..., None] 
-        print(f" [INFO] loaded mask {found_mask_path} in dataset loader")
+        print(f" [INFO] loaded mask {found_mask_path} into dataset loader")
         return mask
     print(" [INFO] No mask found")
     return None
