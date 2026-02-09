@@ -43,29 +43,36 @@ class SceneInfo(NamedTuple):
     nerf_normalization: dict
     ply_path: str
 
-def load_mask_from_path(base_path, image_name, extension=".png"):
+def load_mask_from_path(base_path, image_name, target_size=None, extension=".png"):
     """
     Tries to load a mask from 'mask' or 'masks' folders with the suffix '_mask'.
+    Resizes it to target_size (width, height) if provided.
     Returns the mask as a normalized numpy array (0.0 - 1.0) or None if not found.
     """
     mask_dirs = ["mask", "masks"]
-    # Construct the expected mask filename: image_name + "_mask" + extension
-    # e.g., "0001" -> "0001_mask.png"
     mask_filename = f"{image_name}_mask{extension}"
     found_mask_path = None
+    
     for d in mask_dirs:
         possible_path = os.path.join(base_path, d, mask_filename)
         if os.path.exists(possible_path):
             found_mask_path = possible_path
             break
+    
     if found_mask_path:
         mask = Image.open(found_mask_path).convert('L')
+        if target_size is not None:
+            # Usage: target_size=(width, height)
+            # We use Image.NEAREST to avoid introducing non-binary values at the edges
+            mask = mask.resize(target_size, resample=Image.NEAREST)
         mask = np.array(mask) / 255.0
+        # Threshold to ensure strict binary nature (0.0 or 1.0)
         mask = np.where(mask > 0.5, 1.0, 0.0)
-        # Expand dims to match image channels if necessary later (H, W, 1)
+        # Expand dims (H, W, 1)
         mask = mask[..., None] 
-        print(f" [INFO] loaded mask {found_mask_path} into dataset loader")
+        print(f" [INFO] loaded mask {found_mask_path} with shape {mask.shape}")
         return mask
+        
     print(" [INFO] No mask found")
     return None
 
@@ -130,8 +137,8 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
             print("skip =====", image_path)
             continue
         
-        image = Image.open(image_path)
-        mask = load_mask_from_path(base_path, image_name) # Mask loading as np.array
+        image = Image.open(image_path).convert("RGB")
+        mask = load_mask_from_path(base_path, image_name, (width, height)) # Mask loading as np.array
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=width, height=height, mask=mask)
