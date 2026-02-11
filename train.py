@@ -192,19 +192,23 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         rgb_loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         
+        # == Binary Mask Supervision Modification ==
         mask_loss = None
         lambda_mask = None
         if gt_mask_exists:
             mask_loss = l1_loss(render_alpha, gt_mask)
             # Define a weight for this loss (Hyperparameter)
-            # 0.1 is a good starting point, increase to 1.0 if background noise persists
-            lambda_mask = 0.1
+            # 0.05 - 0.2 for mild supervision
+            # 0.3 - 0.7 for balanced
+            # 1.0 - 5.0 for aggressive supervision
+            lambda_mask = 0.3   
 
         # depth distortion regularization
         distortion_map = rendering[8, :, :]
         # edge aware regularization is not really helpful so we disable it
         # distortion_map = get_edge_aware_distortion_map(gt_image, distortion_map)
         distortion_loss = distortion_map.mean()
+        # == Binary Mask Supervision Modification ==
         if gt_mask_exists:
             distortion_loss = (distortion_map * gt_mask).sum() / (gt_mask.sum() + 1e-6)
         
@@ -234,6 +238,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         normal_error = 1 - (render_normal_world * depth_normal).sum(dim=0)
         depth_normal_loss = normal_error.mean()
+        # == Binary Mask Supervision Modification ==
         if gt_mask_exists:
             depth_normal_loss = (normal_error * gt_mask).sum() / (gt_mask.sum() + 1e-6)
         
@@ -243,6 +248,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         st_fl = time.perf_counter()                                # ====== TIMER ======
         # Final loss
         loss = rgb_loss + depth_normal_loss * lambda_depth_normal + distortion_loss * lambda_distortion
+        # == Binary Mask Supervision Modification ==
         if gt_mask_exists:
             loss = rgb_loss + (depth_normal_loss * lambda_depth_normal) + (distortion_loss * lambda_distortion) + (mask_loss * lambda_mask)
         loss.backward()

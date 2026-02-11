@@ -7,7 +7,8 @@ from pathlib import Path
 
 # training_list = ['Panther']
 # training_list = ['Figurine']
-training_list = ['Hilux']
+# training_list = ['Hilux']
+training_list = ['Panther_1000', 'Panther']
 
 # split = "TrainingSet"
 scenes = training_list
@@ -21,9 +22,9 @@ output_dir = "exp_Custom/release"
 dry_run = False
 RESULTS_ONLY = False
 SEGMENTED = True
-MESH_EXTRACT_ONLY = True
+MESH_EXTRACT_ONLY = False
 
-set_iterations = 5000
+set_iterations = 15000
 
 jobs = list(zip(scenes, factors))
 
@@ -83,38 +84,88 @@ def worker(gpu, scene, factor):
     print(f"Finished job on GPU {gpu} with scene {scene}\n")
     # This worker function starts a job and returns when it's done.
     
+# def dispatch_jobs(jobs, executor):
+#     future_to_job = {}
+#     reserved_gpus = set()  # GPUs that are slated for work but may not be active yet
+
+#     while jobs or future_to_job:
+#         # Get the list of available GPUs, not including those that are reserved.
+#         all_available_gpus = set(GPUtil.getAvailable(order="first", limit=10, maxMemory=0.1, maxLoad=0.1))
+#         # all_available_gpus = set([6,7])
+#         available_gpus = list(all_available_gpus - reserved_gpus - excluded_gpus)
+        
+#         # Launch new jobs on available GPUs
+#         while available_gpus and jobs:
+#             gpu = available_gpus.pop(0)
+#             job = jobs.pop(0)
+#             future = executor.submit(worker, gpu, *job)  # Unpacking job as arguments to worker
+#             future_to_job[future] = (gpu, job)
+
+#             reserved_gpus.add(gpu)  # Reserve this GPU until the job starts processing
+
+#         # Check for completed jobs and remove them from the list of running jobs.
+#         # Also, release the GPUs they were using.
+#         done_futures = [future for future in future_to_job if future.done()]
+#         for future in done_futures:
+#             job = future_to_job.pop(future)  # Remove the job associated with the completed future
+#             gpu = job[0]  # The GPU is the first element in each job tuple
+#             reserved_gpus.discard(gpu)  # Release this GPU
+#             print(f"Job {job} has finished., releasing GPU {gpu}")
+#         # (Optional) You might want to introduce a small delay here to prevent this loop from spinning very fast when there are no GPUs available.
+#         time.sleep(5)
+    
+#     print("All jobs have been processed.")
+
 def dispatch_jobs(jobs, executor):
     future_to_job = {}
     reserved_gpus = set()  # GPUs that are slated for work but may not be active yet
+
+    total_start_time = time.perf_counter()
 
     while jobs or future_to_job:
         # Get the list of available GPUs, not including those that are reserved.
         all_available_gpus = set(GPUtil.getAvailable(order="first", limit=10, maxMemory=0.1, maxLoad=0.1))
         # all_available_gpus = set([6,7])
+        
+        # Note: Ensure `excluded_gpus` is defined in your scope!
         available_gpus = list(all_available_gpus - reserved_gpus - excluded_gpus)
         
         # Launch new jobs on available GPUs
         while available_gpus and jobs:
             gpu = available_gpus.pop(0)
             job = jobs.pop(0)
-            future = executor.submit(worker, gpu, *job)  # Unpacking job as arguments to worker
-            future_to_job[future] = (gpu, job)
-
+            
+            job_start_time = time.perf_counter()
+            
+            future = executor.submit(worker, gpu, *job)
+            future_to_job[future] = (gpu, job, job_start_time)
             reserved_gpus.add(gpu)  # Reserve this GPU until the job starts processing
 
-        # Check for completed jobs and remove them from the list of running jobs.
-        # Also, release the GPUs they were using.
+        # Check for completed jobs and remove them from the list of running jobs
+        # Also, release the GPUs they were using
         done_futures = [future for future in future_to_job if future.done()]
         for future in done_futures:
-            job = future_to_job.pop(future)  # Remove the job associated with the completed future
-            gpu = job[0]  # The GPU is the first element in each job tuple
-            reserved_gpus.discard(gpu)  # Release this GPU
-            print(f"Job {job} has finished., rellasing GPU {gpu}")
-        # (Optional) You might want to introduce a small delay here to prevent this loop from spinning very fast
-        # when there are no GPUs available.
+            gpu, job, job_start_time = future_to_job.pop(future)
+            
+            job_duration = time.perf_counter() - job_start_time
+            
+            reserved_gpus.discard(gpu)
+            try:
+                future.result() 
+            except Exception as exc:
+                print(f"Job {job} generated an exception: {exc}")
+                
+            print(f"Job {job} has finished in {job_duration:.2f} seconds. Releasing GPU {gpu}")
+            
+        # (Optional) You might want to introduce a small delay here to prevent this loop from spinning very fast when there are no GPUs available
         time.sleep(5)
-        
+    
+    total_duration = time.perf_counter() - total_start_time
+    
+    print("-" * 40)
     print("All jobs have been processed.")
+    print(f"SUMMARY: Total time taken for the entire batch: {total_duration:.2f} seconds.")
+    print("-" * 40)
 
 # Using ThreadPoolExecutor to manage the thread pool
 with ThreadPoolExecutor(max_workers=8) as executor:

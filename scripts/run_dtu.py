@@ -10,7 +10,8 @@ from pathlib import Path
 # scenes = [24]
 # scenes = [55, 97, 110, 114]
 # scene 40 always dies at higher iteration counts for some odd reason
-scenes = [55, 69, 83, 97, 110]
+scenes = [69, 83, 97, 110]
+# scenes = [97]
 # scenes = [69, 83, 97, 105, 106]
 
 factors = [2] * len(scenes)
