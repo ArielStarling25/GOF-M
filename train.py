@@ -122,6 +122,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
     gt_mask_exists = False
+    gt_mask_warned = False
     for iteration in range(first_iter, opt.iterations + 1):        
         iter_start.record()
 
@@ -166,13 +167,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # gt_mask = viewpoint_cam.gt_alpha_mask.cuda()
         gt_mask = None
-        try:
-            gt_mask = viewpoint_cam.gt_alpha_mask.cuda().squeeze()
-            gt_mask_exists = True
-        except Exception as e:
-            gt_mask_exists = False
-            print(f"[WARN] No mask detected | {e}")
-
+        if dataset.enable_mask:
+            try:
+                gt_mask = viewpoint_cam.gt_alpha_mask.cuda().squeeze()
+                gt_mask_exists = True
+            except Exception as e:
+                gt_mask_exists = False
+                print(f"[WARN] No mask detected | {e}")
+        elif not gt_mask_warned:
+            print(f"[WARN] Mask Disabled -> To enable mask, append '--enable_mask' parameter to this training script")
+            gt_mask_warned = True
+            
         if gt_mask_exists:
             image = image * gt_mask
             gt_image = gt_image * gt_mask
@@ -198,10 +203,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if gt_mask_exists:
             mask_loss = l1_loss(render_alpha, gt_mask)
             # Define a weight for this loss (Hyperparameter)
+            # 0.0 for no supervision
             # 0.05 - 0.2 for mild supervision
             # 0.3 - 0.7 for balanced
             # 1.0 - 5.0 for aggressive supervision
-            lambda_mask = 0.3   
+            lambda_mask = 0.0   
 
         # depth distortion regularization
         distortion_map = rendering[8, :, :]
@@ -247,7 +253,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         st_fl = time.perf_counter()                                # ====== TIMER ======
         # Final loss
-        loss = rgb_loss + depth_normal_loss * lambda_depth_normal + distortion_loss * lambda_distortion
+        loss = rgb_loss + (depth_normal_loss * lambda_depth_normal) + (distortion_loss * lambda_distortion)
         # == Binary Mask Supervision Modification ==
         if gt_mask_exists:
             loss = rgb_loss + (depth_normal_loss * lambda_depth_normal) + (distortion_loss * lambda_distortion) + (mask_loss * lambda_mask)
