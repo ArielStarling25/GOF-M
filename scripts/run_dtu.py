@@ -20,7 +20,7 @@ excluded_gpus = set([])
 
 output_dir = "exp_dtu/release"
 
-set_iterations = 5000
+set_iterations = 15000
 
 dataset_dir = "dtu"
 
@@ -36,7 +36,7 @@ def train_scene(gpu, scene, factor):
     print("Dataset Path set to: ", dataset_path)
     
     # cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python train.py -s DTU_mask/scan{scene} -m {output_dir}/scan{scene} -r {factor} --use_decoupled_appearance --lambda_distortion 1000"
-    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/scan{scene} -r {factor} --use_decoupled_appearance --lambda_distortion 1000"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/scan{scene} -r {factor} --use_decoupled_appearance --lambda_distortion 1000 --enable_mask"
     print(cmd)
     if not dry_run:
         os.system(cmd)

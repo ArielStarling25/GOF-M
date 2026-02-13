@@ -173,8 +173,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gt_mask_exists = True
             except Exception as e:
                 gt_mask_exists = False
-                print(f"[WARN] No mask detected | {e}")
-        elif not gt_mask_warned:
+                if dataset.enable_mask:
+                    print(f"[WARN] No mask detected | {e}")
+
+        if not dataset.enable_mask and not gt_mask_warned:
             print(f"[WARN] Mask Disabled -> To enable mask, append '--enable_mask' parameter to this training script")
             gt_mask_warned = True
             
@@ -207,7 +209,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             # 0.05 - 0.2 for mild supervision
             # 0.3 - 0.7 for balanced
             # 1.0 - 5.0 for aggressive supervision
-            lambda_mask = 0.0   
+            if dataset.enable_mask:
+                lambda_mask = 0.5
+            else:
+                lambda_mask = 0.0 
 
         # depth distortion regularization
         distortion_map = rendering[8, :, :]
