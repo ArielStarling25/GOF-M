@@ -4,7 +4,7 @@ import GPUtil
 from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
-import datetime as datetime
+from datetime import datetime
 
 # training_list = ['Panther']
 # training_list = ['Figurine']
