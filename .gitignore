@@ -40,3 +40,5 @@ datasets/*
 !datasets/placeholder.txt
 
 custom_datasets/*
+run_logs
+run_logs/*

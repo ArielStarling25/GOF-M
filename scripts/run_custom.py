@@ -30,7 +30,6 @@ log_dir = os.path.join(output_dir, "run_logs")
 
 dry_run = False
 RESULTS_ONLY = False
-SEGMENTED = False
 MESH_EXTRACT_ONLY = False
 ENABLE_MASK = False
 
@@ -50,10 +49,8 @@ def train_scene(gpu, scene, factor=None):
             cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} -r {factor} --use_decoupled_appearance"
             if factor == 0:
                 cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images -r 1 --use_decoupled_appearance"
-            if SEGMENTED:
-                cmd += " --lambda_distortion 1000"
             if ENABLE_MASK:
-                cmd += " --enable_mask"
+                cmd += " --lambda_distortion 1000 --enable_mask"
             print(cmd)
             if not dry_run:
                 os.system(cmd)
@@ -95,72 +92,18 @@ def worker(gpu, scene, factor):
     train_scene(gpu, scene, factor)
     print(f"Finished job on GPU {gpu} with scene {scene}\n")
 
-# def dispatch_jobs(jobs, executor):
-#     future_to_job = {}
-#     reserved_gpus = set()  # GPUs that are slated for work but may not be active yet
-
-#     total_start_time = time.perf_counter()
-
-#     while jobs or future_to_job:
-#         # Get the list of available GPUs, not including those that are reserved.
-#         all_available_gpus = set(GPUtil.getAvailable(order="first", limit=10, maxMemory=0.1, maxLoad=0.1))
-#         # all_available_gpus = set([6,7])
-        
-#         # Note: Ensure `excluded_gpus` is defined in your scope!
-#         available_gpus = list(all_available_gpus - reserved_gpus - excluded_gpus)
-        
-#         # Launch new jobs on available GPUs
-#         while available_gpus and jobs:
-#             gpu = available_gpus.pop(0)
-#             job = jobs.pop(0)
-            
-#             job_start_time = time.perf_counter()
-            
-#             future = executor.submit(worker, gpu, *job)
-#             future_to_job[future] = (gpu, job, job_start_time)
-#             reserved_gpus.add(gpu)  # Reserve this GPU until the job starts processing
-
-#         # Check for completed jobs and remove them from the list of running jobs
-#         # Also, release the GPUs they were using
-#         done_futures = [future for future in future_to_job if future.done()]
-#         for future in done_futures:
-#             gpu, job, job_start_time = future_to_job.pop(future)
-            
-#             job_duration = time.perf_counter() - job_start_time
-            
-#             reserved_gpus.discard(gpu)
-#             try:
-#                 future.result() 
-#             except Exception as exc:
-#                 print(f"Job {job} generated an exception: {exc}")
-                
-#             print(f"Job {job} has finished in {job_duration:.2f} seconds. Releasing GPU {gpu}")
-            
-#         # (Optional) You might want to introduce a small delay here to prevent this loop from spinning very fast when there are no GPUs available
-#         time.sleep(5)
-    
-#     total_duration = time.perf_counter() - total_start_time
-    
-#     print("-" * 40)
-#     print("All jobs have been processed.")
-#     print(f"SUMMARY: Total time taken for the entire batch: {total_duration:.2f} seconds.")
-#     print("-" * 40)
-
 def dispatch_jobs(jobs, executor, excluded_gpus=None):
     if excluded_gpus is None:
         excluded_gpus = set()
 
-    # --- SETUP LOGGING ---
-    log_dir = "run_logs"
     os.makedirs(log_dir, exist_ok=True)
     
-    # Create filename: DDMMYY_run_HHMMSS.txt
+    # Create file
     run_timestamp = datetime.now().strftime("%d%m%y_run_%H%M%S")
     log_file_path = os.path.join(log_dir, f"{run_timestamp}.txt")
     
     print(f"Logging run statistics to: {log_file_path}")
 
-    # --- STATE MANAGEMENT ---
     future_to_job = {}
     reserved_gpus = set()
     completed_jobs_stats = [] # List to store dicts of finished job data
@@ -176,28 +119,20 @@ def dispatch_jobs(jobs, executor, excluded_gpus=None):
         header = (f"{'Job Name':<{w_name}} | {'Duration (s)':<{w_dur}} | "
                   f"{'Start Time':<{w_time}} | {'End Time':<{w_time}}")
         separator = "-" * len(header)
-        
         lines = ["\n" + separator, header, separator]
-        
         for stat in current_stats:
             lines.append(f"{str(stat['name']):<{w_name}} | "
                          f"{stat['duration']:<{w_dur}.2f} | "
                          f"{stat['start']:<{w_time}} | "
                          f"{stat['end']:<{w_time}}")
-        
         lines.append(separator + "\n")
         report_text = "\n".join(lines)
-
-        # Print to Console
         print(report_text)
-        
-        # Save to File
         with open(log_file_path, "a", encoding="utf-8") as f:
             status = "FINAL SUMMARY" if final else "INTERMEDIATE UPDATE"
             f.write(f"\n[{status} - {datetime.now().strftime('%H:%M:%S')}]\n")
             f.write(report_text)
 
-    # --- MAIN LOOP ---
     while jobs or future_to_job:
         # Get available GPUs
         try:
@@ -209,18 +144,15 @@ def dispatch_jobs(jobs, executor, excluded_gpus=None):
 
         available_gpus = list(all_available_gpus - reserved_gpus - excluded_gpus)
         
-        # Launch new jobs
         while available_gpus and jobs:
             gpu = available_gpus.pop(0)
             job = jobs.pop(0)
             
-            # Record start times (Perf for calculation, Datetime for display)
             start_perf = time.perf_counter()
             start_dt = datetime.now()
             
             future = executor.submit(worker, gpu, *job)
             
-            # Store necessary metadata
             future_to_job[future] = {
                 "gpu": gpu, 
                 "job": job, 
@@ -243,18 +175,14 @@ def dispatch_jobs(jobs, executor, excluded_gpus=None):
             end_perf = time.perf_counter()
             end_dt = datetime.now()
             duration = end_perf - start_perf
-            
             reserved_gpus.discard(gpu)
-            
             try:
                 future.result()
             except Exception as exc:
                 print(f"Job {job} generated an exception: {exc}")
             
-            # Format timestamps for the table
             time_fmt = "%d/%m/%y | %H:%M:%S"
             
-            # Add to stats history
             completed_jobs_stats.append({
                 "name": job,
                 "duration": duration,
@@ -269,7 +197,6 @@ def dispatch_jobs(jobs, executor, excluded_gpus=None):
 
         time.sleep(5)
     
-    # --- FINAL WRAP UP ---
     total_duration = time.perf_counter() - total_start_perf
     
     print("-" * 40)
