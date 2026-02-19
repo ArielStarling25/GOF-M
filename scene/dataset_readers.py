@@ -58,7 +58,6 @@ def load_mask_from_path(base_path, image_name, target_size=None, extension=".png
         if os.path.exists(possible_path):
             found_mask_path = possible_path
             break
-    
     if found_mask_path:
         mask = Image.open(found_mask_path).convert('L')
         if target_size is not None:
@@ -72,7 +71,6 @@ def load_mask_from_path(base_path, image_name, target_size=None, extension=".png
         mask = mask[..., None] 
         print(f" [INFO] loaded mask {found_mask_path} with shape {mask.shape}")
         return mask
-        
     print(" [INFO] No mask found")
     return None
 
