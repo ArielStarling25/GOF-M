@@ -31,7 +31,7 @@ log_dir = os.path.join(output_dir, "run_logs")
 
 dry_run = False
 RESULTS_ONLY = False
-MESH_EXTRACT_ONLY = True
+MESH_EXTRACT_ONLY = False
 ENABLE_MASK = False
 
 set_iterations = 30000

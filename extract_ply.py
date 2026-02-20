@@ -37,7 +37,7 @@ def extract_ply(dataset: ModelParams, iteration: int):
         
         # Export the Gaussians using the standard 3DGS save method
         print(f"Exporting 3D Gaussians to: {output_path}...")
-        gaussians.save_ply(output_path)
+        gaussians.save_fused_ply(output_path)
         print("Extraction complete. This .ply file is ready for standard 3DGS viewers.")
 
 if __name__ == "__main__":
