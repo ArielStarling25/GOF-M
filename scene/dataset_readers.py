@@ -61,17 +61,19 @@ def load_mask_from_path(base_path, image_name, target_size=None, extension=".png
     if found_mask_path:
         mask = Image.open(found_mask_path).convert('L')
         if target_size is not None:
-            # Usage: target_size=(width, height)
-            # We use Image.NEAREST to avoid introducing non-binary values at the edges
+            # target_size=(width, height)
             mask = mask.resize(target_size, resample=Image.NEAREST)
         mask = np.array(mask) / 255.0
         # Threshold to ensure strict binary nature (0.0 or 1.0)
         mask = np.where(mask > 0.5, 1.0, 0.0)
         # Expand dims (H, W, 1)
         mask = mask[..., None] 
-        print(f" [INFO] loaded mask {found_mask_path} with shape {mask.shape}")
+        # print(f" [INFO] loaded mask {found_mask_path} with shape {mask.shape}")
+        print(f'\r [INFO] loaded mask {found_mask_path} with shape {mask.shape}', end='\r', flush=True)
         return mask
-    print(" [INFO] No mask found")
+    # print()
+    # print(f" [INFO] No mask found at {base_path} | filename {mask_filename}")
+    print(f'\r [INFO] No mask found at {base_path} | filename {mask_filename}', end='\r', flush=True)
     return None
 
 def getNerfppNorm(cam_info):
@@ -100,6 +102,7 @@ def getNerfppNorm(cam_info):
 def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     cam_infos = []
     base_path = os.path.dirname(images_folder.rstrip(os.path.sep))
+    print()
     for idx, key in enumerate(cam_extrinsics):
         sys.stdout.write('\r')
         # the exact output you're looking for:
@@ -224,6 +227,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         fovx = contents["camera_angle_x"]
 
         frames = contents["frames"]
+        print()
         for idx, frame in enumerate(frames):
             cam_name = os.path.join(path, frame["file_path"] + extension)
 
@@ -261,8 +265,10 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
     return cam_infos
 
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
+    print()
     print("Reading Training Transforms")
     train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
+    print()
     print("Reading Test Transforms")
     test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension)
     
@@ -306,6 +312,7 @@ def readMultiScale(path, white_background,split, only_highres=False):
     meta = {k: np.array(meta[k]) for k in meta}
     
     # should now have ['pix2cam', 'cam2world', 'width', 'height'] in self.meta
+    print()
     for idx, relative_path in enumerate(meta['file_path']):
         if only_highres and not relative_path.endswith("d0.png"):
             continue

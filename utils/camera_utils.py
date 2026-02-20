@@ -83,23 +83,26 @@ def loadCam2(args, id, cam_info, resolution_scale):
         from PIL import Image
         # Convert numpy mask back to PIL for consistent resizing if needed, 
         # or use torch.nn.functional.interpolate if it's already a tensor.
-        # Assuming cam_info.mask is the numpy array we loaded earlier:
+        # Assuming cam_info.mask is the numpy array we loaded earlier
         mask_pil = Image.fromarray((cam_info.mask.squeeze() * 255).astype(np.uint8), mode='L')
         loaded_mask = PILtoTorch(mask_pil, resolution)
         gt_image = resized_image_rgb
-        print("[INFO] Loaded mask from dataset reader into memory!")
+        # print("[INFO] Loaded mask from dataset reader into memory!")
+        print(f'\r [INFO] Loaded mask with id {id} from dataset reader into memory!', end='\r', flush=True)
     # Legacy Method: Check for embedded Alpha channel (Original method)
     elif len(cam_info.image.split()) > 3:
         import torch
         resized_image_rgb = torch.cat([PILtoTorch(im, resolution) for im in cam_info.image.split()[:3]], dim=0)
         loaded_mask = PILtoTorch(cam_info.image.split()[3], resolution)
         gt_image = resized_image_rgb
-        print("[INFO] Loaded mask from embedded image into memory!")
+        # print("[INFO] Loaded mask from embedded image into memory!")
+        print(f'\r [INFO] Loaded mask from embedded image into memory!', end='\r', flush=True)
     else:
         resized_image_rgb = PILtoTorch(cam_info.image, resolution)
         loaded_mask = None
         gt_image = resized_image_rgb
-        print("[INFO] No Mask to load into memory!")
+        # print(f"[INFO] No Mask to load into memory for id {id}!")
+        print(f'\r [INFO] No Mask to load into memory for id {id}!', end='\r', flush=True)
 
     return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
@@ -108,6 +111,7 @@ def loadCam2(args, id, cam_info, resolution_scale):
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):
     camera_list = []
+    print()
     for id, c in enumerate(cam_infos):
         item = loadCam2(args, id, c, resolution_scale)
         # print(item)

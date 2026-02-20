@@ -10,12 +10,13 @@ from datetime import datetime
 # training_list = ['Figurine']
 # training_list = ['Hilux']
 # training_list = ['Panther_1000', 'Panther']
-training_list = [os.path.join("refnerf", "ball"), 
-                 os.path.join("refnerf", "car"),
-                 os.path.join("refnerf", "coffee"),
-                 os.path.join("refnerf", "helmet"),
-                 os.path.join("refnerf", "teapot"),
-                 os.path.join("refnerf", "toaster")]
+training_list = [
+    os.path.join("refnerf", "ball"), 
+    os.path.join("refnerf", "car"),
+    os.path.join("refnerf", "coffee"),
+    os.path.join("refnerf", "helmet"),
+    os.path.join("refnerf", "teapot"),
+    ]
 
 # split = "TrainingSet"
 scenes = training_list
@@ -30,7 +31,7 @@ log_dir = os.path.join(output_dir, "run_logs")
 
 dry_run = False
 RESULTS_ONLY = False
-MESH_EXTRACT_ONLY = False
+MESH_EXTRACT_ONLY = True
 ENABLE_MASK = False
 
 set_iterations = 30000
@@ -60,7 +61,13 @@ def train_scene(gpu, scene, factor=None):
         if not dry_run:
             os.system(cmd)
 
-        #fusion
+
+        cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_ply.py -m {output_dir}/{scene}"
+        print(cmd)
+        if not dry_run:
+            os.system(cmd)
+
+        ## fusion
         cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration {set_iterations} --texture_mesh"
         print(cmd)
         if not dry_run:
