@@ -16,6 +16,7 @@ import cv2
 import torch
 import torchvision
 import random
+import time
 from random import randint
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render, network_gui
@@ -89,18 +90,18 @@ def L1_loss_appearance(image, gt_image, gaussians, view_idx, return_transformed_
     
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
-    tb_writer = prepare_output_and_logger(dataset)
-    gaussians = GaussianModel(dataset.sh_degree)
-    scene = Scene(dataset, gaussians)
-    gaussians.training_setup(opt)
-    if checkpoint:
+    tb_writer = prepare_output_and_logger(dataset)                              # Setting up output folders and necessary loggers
+    gaussians = GaussianModel(dataset.sh_degree)                                # Setting up the 3D Gaussian objects   
+    scene = Scene(dataset, gaussians)                                           # Setting up the overall 3D Gaussian Field
+    gaussians.training_setup(opt)                                               # Initialising the Gaussians within the field
+    if checkpoint:                                                              # Loading the Deep Learning Model (if any)
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
 
-    bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+    bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]             # Sets the background colour if the dataset consists of .png with no backgrounds
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
-    iter_start = torch.cuda.Event(enable_timing = True)
+    iter_start = torch.cuda.Event(enable_timing = True)                         
     iter_end = torch.cuda.Event(enable_timing = True)
 
     trainCameras = scene.getTrainCameras().copy()
@@ -116,26 +117,30 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             highresolution_index.append(index)
 
     gaussians.compute_3D_filter(cameras=trainCameras)
-
     viewpoint_stack = None
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
+    gt_mask_exists = False
+    gt_mask_warned = False
     for iteration in range(first_iter, opt.iterations + 1):        
-
         iter_start.record()
 
+        st_glr = time.perf_counter()                                # ====== TIMER =======
         gaussians.update_learning_rate(iteration)
+        et_glr = time.perf_counter()                                # ====== TIMER =======
 
+        st_oush = time.perf_counter()                               # ====== TIMER =======
         # Every 1000 its we increase the levels of SH up to a maximum degree
         if iteration % 1000 == 0:
             gaussians.oneupSHdegree()
+        et_oush = time.perf_counter()                               # ====== TIMER =======
 
         # Pick a random Camera
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        
+        # print(scene.getTrainCameras().copy())
         # Pick a random high resolution camera
         if random.random() < 0.3 and dataset.sample_more_highres:
             viewpoint_cam = trainCameras[highresolution_index[randint(0, len(highresolution_index)-1)]]
@@ -144,51 +149,127 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if (iteration - 1) == debug_from:
             pipe.debug = True
 
-        
+        st_ren = time.perf_counter()                               # ====== TIMER =======
+
         render_pkg = render(viewpoint_cam, gaussians, pipe, background, kernel_size=dataset.kernel_size)
         rendering, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        
+
+        et_ren = time.perf_counter()                               # ====== TIMER =======
+
         image = rendering[:3, :, :]
+        # Extract Rendered Opacity
+        render_alpha = rendering[7, :, :]
         
+        st_rgbL = time.perf_counter()                                # ====== TIMER =======
+
         # rgb Loss
         gt_image = viewpoint_cam.original_image.cuda()
-        
+
+        # gt_mask = viewpoint_cam.gt_alpha_mask.cuda()
+        gt_mask = None
+        if dataset.enable_mask:
+            try:
+                gt_mask = viewpoint_cam.gt_alpha_mask.cuda().squeeze()
+                gt_mask_exists = True
+            except Exception as e:
+                gt_mask_exists = False
+                if dataset.enable_mask:
+                    print(f"[WARN] No mask detected | {e}")
+
+        if not dataset.enable_mask and not gt_mask_warned:
+            print(f"[WARN] Mask Disabled -> To enable mask, append '--enable_mask' parameter to this training script")
+            gt_mask_warned = True
+            
+        if gt_mask_exists:
+            image = image * gt_mask
+            gt_image = gt_image * gt_mask
+
+        et_rgbL = time.perf_counter()                                # ====== TIMER ======
+
+        st_other = time.perf_counter()                                # ====== TIMER ======
+
+        st_ll1 = time.perf_counter()                                # ====== TIMER ======
+
         Ll1 = l1_loss(image, gt_image)
         # use L1 loss for the transformed image if using decoupled appearance
         if dataset.use_decoupled_appearance:
             Ll1 = L1_loss_appearance(image, gt_image, gaussians, viewpoint_cam.idx)
+
+        et_ll1 = time.perf_counter()                                # ====== TIMER ======
         
         rgb_loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         
+        # == Binary Mask Supervision Modification ==
+        mask_loss = None
+        lambda_mask = None
+        if gt_mask_exists:
+            mask_loss = l1_loss(render_alpha, gt_mask)
+            # Define a weight for this loss (Hyperparameter)
+            # 0.0 for no supervision
+            # 0.05 - 0.2 for mild supervision
+            # 0.3 - 0.7 for balanced
+            # 1.0 - 5.0 for aggressive supervision
+            if dataset.enable_mask:
+                lambda_mask = 0.5
+            else:
+                lambda_mask = 0.0 
+
         # depth distortion regularization
         distortion_map = rendering[8, :, :]
         # edge aware regularization is not really helpful so we disable it
         # distortion_map = get_edge_aware_distortion_map(gt_image, distortion_map)
         distortion_loss = distortion_map.mean()
+        # == Binary Mask Supervision Modification ==
+        if gt_mask_exists:
+            distortion_loss = (distortion_map * gt_mask).sum() / (gt_mask.sum() + 1e-6)
         
+        st_dn = time.perf_counter()                                # ====== TIMER ======
+
         # depth normal consistency
         depth = rendering[6, :, :]
         depth_normal, _ = depth_to_normal(viewpoint_cam, depth[None, ...])
         depth_normal = depth_normal.permute(2, 0, 1)
 
+        et_dn = time.perf_counter()                                # ====== TIMER ======
+
+        st_rn = time.perf_counter()                                # ====== TIMER ======
+
         render_normal = rendering[3:6, :, :]
         render_normal = torch.nn.functional.normalize(render_normal, p=2, dim=0)
+
+        et_rn = time.perf_counter()                                # ====== TIMER ======
         
+        st_rnw = time.perf_counter()                                # ====== TIMER ======
+
         c2w = (viewpoint_cam.world_view_transform.T).inverse()
         normal2 = c2w[:3, :3] @ render_normal.reshape(3, -1)
         render_normal_world = normal2.reshape(3, *render_normal.shape[1:])
+
+        et_rnw = time.perf_counter()                                # ====== TIMER ======
         
         normal_error = 1 - (render_normal_world * depth_normal).sum(dim=0)
         depth_normal_loss = normal_error.mean()
+        # == Binary Mask Supervision Modification ==
+        if gt_mask_exists:
+            depth_normal_loss = (normal_error * gt_mask).sum() / (gt_mask.sum() + 1e-6)
         
         lambda_distortion = opt.lambda_distortion if iteration >= opt.distortion_from_iter else 0.0
         lambda_depth_normal = opt.lambda_depth_normal if iteration >= opt.depth_normal_from_iter else 0.0
         
+        st_fl = time.perf_counter()                                # ====== TIMER ======
         # Final loss
-        loss = rgb_loss + depth_normal_loss * lambda_depth_normal + distortion_loss * lambda_distortion
+        loss = rgb_loss + (depth_normal_loss * lambda_depth_normal) + (distortion_loss * lambda_distortion)
+        # == Binary Mask Supervision Modification ==
+        if gt_mask_exists:
+            loss = rgb_loss + (depth_normal_loss * lambda_depth_normal) + (distortion_loss * lambda_distortion) + (mask_loss * lambda_mask)
         loss.backward()
-        
+        et_fl = time.perf_counter()                                # ====== TIMER ======
+
+        st_iterR = time.perf_counter()                                # ====== TIMER ======
         iter_end.record()
+        et_iterR = time.perf_counter()                                # ====== TIMER ======
+
+        et_other = time.perf_counter()                                # ====== TIMER ======
 
         is_save_images = False # default to not save images
         if is_save_images and (iteration % opt.densification_interval == 0):
@@ -243,8 +324,41 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if iteration == opt.iterations:
                 progress_bar.close()
 
+            st_tr = time.perf_counter()                                # ====== TIMER =======
+
             # Log and save
             training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background, dataset.kernel_size))
+
+            et_tr = time.perf_counter()                                # ====== TIMER =======
+            
+            dur_ms_glr = (et_glr - st_glr) * 1000                      # GAUSSIAN LEARNING RATE TIMER
+            dur_ms_oush = (et_oush - st_oush) * 1000                   # One Up SH Degree TIMER
+            dur_ms_ren = (et_ren - st_ren) * 1000                      # Render TIMER
+            dur_ms_rgbL = (et_rgbL - st_rgbL) * 1000                   # RGB Loss TIMER
+            dur_ms_other = (et_other - st_other) * 1000                # Others TIMER
+            dur_ms_ll1 = (et_ll1 - st_ll1) * 1000                       # LL1 Calc TIMER
+            dur_ms_dn = (et_dn - st_dn) * 1000                          # Depth Normal Calc TIMER
+            dur_ms_rn = (et_rn - st_rn) * 1000                          # Render Normal Calc TIMER
+            dur_ms_rnw = (et_rnw - st_rnw) * 1000                          # Render Normal World Calc TIMER
+            dur_ms_fl = (et_fl - st_fl) * 1000                          # Final Loss TIMER
+            dur_ms_iterR = (et_iterR - st_iterR) * 1000                # Iteration end recording TIMER
+            dur_ms_tr = (et_tr - st_tr) * 1000                         # TRAINING REPORT TIMER
+
+            # print("===============================================================================")
+            # print(f"Gaussian Update Learning Rate           | Execution Time: {dur_ms_glr:.4f} ms")  
+            # print(f"One Up SH Degree                        | Execution Time: {dur_ms_oush:.4f} ms")  
+            # print(f"Rendering phase                         | Execution Time: {dur_ms_ren:.4f} ms")  
+            # print(f"RGB Loss Calculation                    | Execution Time: {dur_ms_rgbL:.4f} ms")    
+            # print(f"Complicated Math Stuff                  | Execution Time: {dur_ms_other:.4f} ms")
+            # print(f"    - Ll1 Calculation                   | Execution Time: {dur_ms_ll1:.4f} ms")  
+            # print(f"    - Depth Normal Calculation          | Execution Time: {dur_ms_dn:.4f} ms")  
+            # print(f"    - Render Normal Calculation         | Execution Time: {dur_ms_rn:.4f} ms")  
+            # print(f"    - Render Normal World Calculation   | Execution Time: {dur_ms_rnw:.4f} ms")  
+            # print(f"    - Final Loss                        | Execution Time: {dur_ms_fl:.4f} ms")  
+            # print(f"    - Iteration End Record              | Execution Time: {dur_ms_iterR:.4f} ms")  
+            # print(f"Training Report Logging and Saving      | Execution Time: {dur_ms_tr:.4f} ms")  
+            # print("===============================================================================")
+
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -277,7 +391,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
             
-    
 def prepare_output_and_logger(args):    
     if not args.model_path:
         if os.getenv('OAR_JOB_ID'):
@@ -371,7 +484,7 @@ if __name__ == "__main__":
     
     # # Start GUI server, configure and run training
     # network_gui.init(args.ip, args.port)
-    torch.autograd.set_detect_anomaly(args.detect_anomaly)
+    torch.autograd.set_detect_anomaly(args.detect_anomaly)  # Used to detect invalid values during backpropagation
     training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
 
     # All done

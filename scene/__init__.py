@@ -40,7 +40,17 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
 
+        # ===== New - For Mask Integration =====
+
+        if os.path.exists(os.path.join(args.source_path, "mask")) or os.path.exists(os.path.join(args.source_path, "masks")):
+            print("Found masks file, assuming object reconstruction!")
+        else:
+            print("Could not find masks file... Assuming whole scene reconstruction...")
+
+        # ===== New - For Mask Integration =====
+
         if os.path.exists(os.path.join(args.source_path, "sparse")):
+            print("Found sparse file, assuming COLMAP!")
             scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
             print("Found transforms_train.json file, assuming Blender data set!")
@@ -50,7 +60,7 @@ class Scene:
             scene_info = sceneLoadTypeCallbacks["Multi-scale"](args.source_path, args.white_background, args.eval, args.load_allres)
         else:
             assert False, "Could not recognize scene type!"
-
+        # print(scene_info)
         if not self.loaded_iter:
             with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
                 dest_file.write(src_file.read())
@@ -72,11 +82,13 @@ class Scene:
         self.cameras_extent = scene_info.nerf_normalization["radius"]
 
         for resolution_scale in resolution_scales:
+            print()
             print("Loading Training Cameras")
             self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
+            print()
             print("Loading Test Cameras")
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
-
+        # print(self.train_cameras)
         if self.loaded_iter:
             self.gaussians.load_ply(os.path.join(self.model_path,
                                                            "point_cloud",

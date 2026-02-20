@@ -3,9 +3,12 @@ import json
 import numpy as np
 import trimesh
 
-scenes = ["chair", "drums", "ficus", "hotdog", "lego", "materials", "mic", "ship"]
+# scenes = ["chair", "drums", "ficus", "hotdog", "lego", "materials", "mic", "ship"]
+scenes = ['lego', 'materials', 'drums', 'ficus']
 
 output_dirs = ["exp_nerf_synthetic/release"]
+
+set_iterations = 10000
 
 results = []
 for scene in scenes:
@@ -13,7 +16,7 @@ for scene in scenes:
     for output in output_dirs:
         json_file = f"{output}/{scene}/results.json"
         data = json.load(open(json_file))
-        data = data['ours_30000'] if 'ours_30000' in data else data['ours_7000']
+        data = data[f'ours_{set_iterations}'] if f'ours_{set_iterations}' in data else data['ours_7000']
 
         iteration = "30K iter: "
         point_cloud_file = f"{output}/{scene}/point_cloud/iteration_30000/point_cloud.ply"

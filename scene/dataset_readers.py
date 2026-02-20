@@ -34,6 +34,7 @@ class CameraInfo(NamedTuple):
     image_name: str
     width: int
     height: int
+    mask: np.array = None # NEW
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -41,6 +42,39 @@ class SceneInfo(NamedTuple):
     test_cameras: list
     nerf_normalization: dict
     ply_path: str
+
+def load_mask_from_path(base_path, image_name, target_size=None, extension=".png"):
+    """
+    Tries to load a mask from 'mask' or 'masks' folders with the suffix '_mask'.
+    Resizes it to target_size (width, height) if provided.
+    Returns the mask as a normalized numpy array (0.0 - 1.0) or None if not found.
+    """
+    mask_dirs = ["mask", "masks"]
+    mask_filename = f"{image_name}_mask{extension}"
+    found_mask_path = None
+    
+    for d in mask_dirs:
+        possible_path = os.path.join(base_path, d, mask_filename)
+        if os.path.exists(possible_path):
+            found_mask_path = possible_path
+            break
+    if found_mask_path:
+        mask = Image.open(found_mask_path).convert('L')
+        if target_size is not None:
+            # target_size=(width, height)
+            mask = mask.resize(target_size, resample=Image.NEAREST)
+        mask = np.array(mask) / 255.0
+        # Threshold to ensure strict binary nature (0.0 or 1.0)
+        mask = np.where(mask > 0.5, 1.0, 0.0)
+        # Expand dims (H, W, 1)
+        mask = mask[..., None] 
+        # print(f" [INFO] loaded mask {found_mask_path} with shape {mask.shape}")
+        print(f'\r [INFO] loaded mask {found_mask_path} with shape {mask.shape}', end='\r', flush=True)
+        return mask
+    # print()
+    # print(f" [INFO] No mask found at {base_path} | filename {mask_filename}")
+    print(f'\r [INFO] No mask found at {base_path} | filename {mask_filename}', end='\r', flush=True)
+    return None
 
 def getNerfppNorm(cam_info):
     def get_center_and_diag(cam_centers):
@@ -67,6 +101,8 @@ def getNerfppNorm(cam_info):
 
 def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     cam_infos = []
+    base_path = os.path.dirname(images_folder.rstrip(os.path.sep))
+    print()
     for idx, key in enumerate(cam_extrinsics):
         sys.stdout.write('\r')
         # the exact output you're looking for:
@@ -96,15 +132,17 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
 
         image_path = os.path.join(images_folder, os.path.basename(extr.name))
         image_name = os.path.basename(image_path).split(".")[0]
+        extension = os.path.splitext(image_path)[1]
         
         if not os.path.exists(image_path) or "sky_mask" in image_path:
             print("skip =====", image_path)
             continue
         
-        image = Image.open(image_path)
+        image = Image.open(image_path).convert("RGB")
+        mask = load_mask_from_path(base_path, image_name, (width, height)) # Mask loading as np.array
 
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                              image_path=image_path, image_name=image_name, width=width, height=height)
+                              image_path=image_path, image_name=image_name, width=width, height=height, mask=mask)
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos
@@ -189,6 +227,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         fovx = contents["camera_angle_x"]
 
         frames = contents["frames"]
+        print()
         for idx, frame in enumerate(frames):
             cam_name = os.path.join(path, frame["file_path"] + extension)
 
@@ -218,14 +257,18 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             FovY = fovy 
             FovX = fovx
 
+            mask = load_mask_from_path(path, image_name, extension)
+
             cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+                            image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1], mask=mask))
             
     return cam_infos
 
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
+    print()
     print("Reading Training Transforms")
     train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
+    print()
     print("Reading Test Transforms")
     test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension)
     
@@ -269,11 +312,13 @@ def readMultiScale(path, white_background,split, only_highres=False):
     meta = {k: np.array(meta[k]) for k in meta}
     
     # should now have ['pix2cam', 'cam2world', 'width', 'height'] in self.meta
+    print()
     for idx, relative_path in enumerate(meta['file_path']):
         if only_highres and not relative_path.endswith("d0.png"):
             continue
         image_path = os.path.join(path, relative_path)
         image_name = Path(image_path).stem
+        extension = os.path.splitext(image_path)[1]
         
         # NeRF 'transform_matrix' is a camera-to-world transform
         c2w = meta["cam2world"][idx]
@@ -300,8 +345,10 @@ def readMultiScale(path, white_background,split, only_highres=False):
         FovY = fovy 
         FovX = fovx
 
+        mask = load_mask_from_path(path, image_name, extension)
+
         cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                        image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+                        image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1], mask=mask))
     return cam_infos
 
 

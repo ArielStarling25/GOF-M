@@ -4,42 +4,60 @@ import os
 import GPUtil
 from concurrent.futures import ThreadPoolExecutor
 import time
+from pathlib import Path
 
-scenes = ["bicycle", "bonsai", "counter", "flowers", "garden", "stump", "treehill", "kitchen", "room"]
+# scenes = ["bicycle", "bonsai", "counter", "flowers", "garden", "stump", "treehill", "kitchen", "room"] # I dont have access to all unfortunately
 
-factors = [4, 2, 2, 4, 4, 4, 4, 2, 2]
+# scenes = ["bicycle", "bonsai", "counter", "garden", "stump", "kitchen", "room"]
+scenes = ["kitchen"]
+# scenes = ["stump"]
+
+#factors = [4, 2, 2, 4, 4, 4, 4, 2, 2]
+# factors = [4, 2, 2, 4, 4, 2, 2]
+# factors = [2]
+factors = [4]
+# factors = [8]
 
 excluded_gpus = set([])
 
 output_dir = "exp_360/release"
+
+set_iterations = 10000
 
 dry_run = False
 
 jobs = list(zip(scenes, factors))
 
 def train_scene(gpu, scene, factor):
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python train.py -s 360_v2/{scene} -m {output_dir}/{scene} --eval -i images_{factor} --port {6109+int(gpu)}"
+    current_file_path = Path(__file__).resolve()
+    scripts_dir = current_file_path.parent
+    project_root = scripts_dir.parent
+    #dataset_path = project_root / "datasets" / "360_v2" / scene
+    dataset_path = os.path.join(project_root, "datasets", "360_v2", scene)
+    print("Dataset Path set to: ", dataset_path)
+
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 train.py -s {dataset_path} -m {output_dir}/{scene} --eval -i images_{factor} --port {6109+int(gpu)}"
     print(cmd)
     if not dry_run:
        os.system(cmd)
 
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python render.py -m {output_dir}/{scene} --data_device cpu --skip_train"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 render.py -m {output_dir}/{scene} --data_device cpu --skip_train"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python metrics.py -m {output_dir}/{scene}"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 metrics.py -m {output_dir}/{scene}"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
-    cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python extract_mesh.py -m {output_dir}/{scene} --iteration 30000"
+    # cmd = f"OMP_NUM_THREADS=4 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration 30000"
+    cmd = f"OMP_NUM_THREADS=6 CUDA_VISIBLE_DEVICES={gpu} python3 extract_mesh.py -m {output_dir}/{scene} --iteration {set_iterations} --texture_mesh"
     print(cmd)
     if not dry_run:
         os.system(cmd)
     
     return True
-
 
 def worker(gpu, scene, factor):
     print(f"Starting job on GPU {gpu} with scene {scene}\n")
@@ -50,12 +68,16 @@ def worker(gpu, scene, factor):
 def dispatch_jobs(jobs, executor):
     future_to_job = {}
     reserved_gpus = set()  # GPUs that are slated for work but may not be active yet
+    print("Starting Job Dispatcher... MipNeRF360")
 
     while jobs or future_to_job:
         # Get the list of available GPUs, not including those that are reserved.
-        all_available_gpus = set(GPUtil.getAvailable(order="first", limit=10, maxMemory=0.1, maxLoad=0.1))
+        all_available_gpus = set(GPUtil.getAvailable(order="first", limit=10, maxMemory=0.5, maxLoad=0.5))
+        #print("GPUs:",GPUtil.getAvailable(order="first", limit=10, maxMemory=0.5, maxLoad=0.))
         # all_available_gpus = set([0,1,2,3])
+        #print("All Available GPUs:",all_available_gpus)
         available_gpus = list(all_available_gpus - reserved_gpus - excluded_gpus)
+        #print("Available GPUs:",available_gpus)
         
         # Launch new jobs on available GPUs
         while available_gpus and jobs:
@@ -76,7 +98,7 @@ def dispatch_jobs(jobs, executor):
             print(f"Job {job} has finished., rellasing GPU {gpu}")
         # (Optional) You might want to introduce a small delay here to prevent this loop from spinning very fast
         # when there are no GPUs available.
-        time.sleep(5)
+        time.sleep(1)
         
     print("All jobs have been processed.")
 

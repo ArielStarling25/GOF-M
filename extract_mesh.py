@@ -12,9 +12,13 @@ import numpy as np
 import trimesh
 from tetranerf.utils.extension import cpp
 from utils.tetmesh import marching_tetrahedra
+from datetime import datetime
+
+def get_current_timestamp():
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 @torch.no_grad()
-def evaluage_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=False):
+def evaluate_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=False):
     final_alpha = torch.ones((points.shape[0]), dtype=torch.float32, device="cuda")
     if return_color:
         final_color = torch.ones((points.shape[0], 3), dtype=torch.float32, device="cuda")
@@ -41,19 +45,31 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
     
     # generate tetra points here
     points, points_scale = gaussians.get_tetra_points(views, near, far)
+
+    cells_path = os.path.join(render_path, "cells.pt")
+    cells = None
+
     # load cell if exists
-    if os.path.exists(os.path.join(render_path, "cells.pt")):
-        print("load existing cells")
-        cells = torch.load(os.path.join(render_path, "cells.pt"))
-    else:
-        # create cell and save cells
-        print("create cells and save")
+    if os.path.exists(cells_path):
+        print("Found existing cells.pt, checking validity...")
+        loaded_cells = torch.load(cells_path)
+        
+        # Validation: Check if the max index in cells is within the bounds of current points
+        if loaded_cells.max() < points.shape[0]:
+            print("Cells are valid. Loading...")
+            cells = loaded_cells
+        else:
+            print(f"Cache mismatch! Cells max index ({loaded_cells.max()}) >= Points count ({points.shape[0]}). Ignoring cache.")
+
+    # If cells were not loaded or invalid, triangulate now
+    if cells is None:
+        print("Triangulating points to create cells...")
         cells = cpp.triangulate(points)
-        # we should filter the cell if it is larger than the gaussians
-        torch.save(cells, os.path.join(render_path, "cells.pt"))
+        torch.save(cells, cells_path)
+        print("Cells saved.")
     
     # evaluate alpha
-    alpha = evaluage_alpha(points, views, gaussians, pipeline, background, kernel_size)
+    alpha = evaluate_alpha(points, views, gaussians, pipeline, background, kernel_size)
 
     vertices = points.cuda()[None]
     tets = cells.cuda().long()
@@ -89,7 +105,7 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
     for step in range(n_binary_steps):
         print("binary search in step {}".format(step))
         mid_points = (left_points + right_points) / 2
-        alpha = evaluage_alpha(mid_points, views, gaussians, pipeline, background, kernel_size)
+        alpha = evaluate_alpha(mid_points, views, gaussians, pipeline, background, kernel_size)
         mid_sdf = alpha_to_sdf(alpha).squeeze().unsqueeze(-1)
         
         ind_low = ((mid_sdf < 0) & (left_sdf < 0)) | ((mid_sdf > 0) & (left_sdf > 0))
@@ -104,7 +120,7 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
             continue
         
         if texture_mesh:
-            _, color = evaluage_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=True)
+            _, color = evaluate_alpha(points, views, gaussians, pipeline, background, kernel_size, return_color=True)
             vertex_colors=(color.cpu().numpy() * 255).astype(np.uint8)
         else:
             vertex_colors=None
@@ -117,14 +133,13 @@ def marching_tetrahedra_with_binary_search(model_path, name, iteration, views, g
             mesh.update_vertices(mask)
             mesh.update_faces(face_mask)
         
-        mesh.export(os.path.join(render_path, f"mesh_binary_search_{step}.ply"))
+        mesh.export(os.path.join(render_path, f"mesh_binary_search_{step}_{get_current_timestamp()}.ply"))
 
     # linear interpolation
     # right_sdf *= -1
     # points = (left_points * left_sdf + right_points * right_sdf) / (left_sdf + right_sdf)
     # mesh = trimesh.Trimesh(vertices=points.cpu().numpy(), faces=faces)
     # mesh.export(os.path.join(render_path, f"mesh_binary_search_interp.ply"))
-    
 
 def extract_mesh(dataset : ModelParams, iteration : int, pipeline : PipelineParams, filter_mesh : bool, texture_mesh : bool, near : float, far : float):
     with torch.no_grad():
@@ -138,6 +153,7 @@ def extract_mesh(dataset : ModelParams, iteration : int, pipeline : PipelinePara
         kernel_size = dataset.kernel_size
         
         cams = scene.getTrainCameras()
+        print("Starting Marching Cubes + Tetrahedra + Binary Search")
         marching_tetrahedra_with_binary_search(dataset.model_path, "test", iteration, cams, gaussians, pipeline, background, kernel_size, filter_mesh, texture_mesh, near, far)
 
 if __name__ == "__main__":
@@ -161,3 +177,79 @@ if __name__ == "__main__":
     torch.cuda.set_device(torch.device("cuda:0"))
     
     extract_mesh(model.extract(args), args.iteration, pipeline.extract(args), args.filter_mesh, args.texture_mesh, args.near, args.far)
+
+@torch.no_grad()
+def evaluate_alpha2(points, views, gaussians, pipeline, background, kernel_size, return_color=False):
+    final_alpha = torch.ones((points.shape[0]), dtype=torch.float32, device="cuda")
+    
+    # Counter for how many views think this point is "background"
+    # This acts as a voting system to handle noise
+    background_votes = torch.zeros((points.shape[0]), dtype=torch.int32, device="cuda")
+
+    if return_color:
+        final_color = torch.ones((points.shape[0], 3), dtype=torch.float32, device="cuda")
+    
+    with torch.no_grad():
+        for _, view in enumerate(tqdm(views, desc="Rendering progress")):
+            ret = integrate(points, view, gaussians, pipeline, background, kernel_size=kernel_size)
+            alpha_integrated = ret["alpha_integrated"]
+            
+            if return_color:
+                color_integrated = ret["color_integrated"]    
+                final_color = torch.where((alpha_integrated < final_alpha).reshape(-1, 1), color_integrated, final_color)
+            
+            final_alpha = torch.min(final_alpha, alpha_integrated)
+            
+            if view.gt_alpha_mask is not None:
+                # Transform points to Homogeneous Clip Space
+                full_proj = view.full_proj_transform.to(points.device)
+                points_hom = torch.cat([points, torch.ones_like(points[:, :1])], dim=1)
+                p_proj = points_hom @ full_proj
+                
+                # Convert to NDC (Normalized Device Coordinates)
+                p_w = p_proj[:, 3:4]
+                p_ndc = p_proj[:, :3] / (p_w + 1e-6)
+
+                # Check Frustum Bounds
+                valid_z = p_w[:, 0] > 0.0
+                valid_x = (p_ndc[:, 0] >= -1.0) & (p_ndc[:, 0] <= 1.0)
+                valid_y = (p_ndc[:, 1] >= -1.0) & (p_ndc[:, 1] <= 1.0)
+                in_frustum = valid_z & valid_x & valid_y
+
+                # Convert NDC to Pixel Coordinates
+                H, W = view.image_height, view.image_width
+                
+                # X coordinate: -1 (Left) -> 0, +1 (Right) -> W
+                u = ((p_ndc[:, 0] + 1) * W - 1) * 0.5
+                
+                # OpenGL NDC Y: -1 (Bottom), +1 (Top)
+                # Image Pixel Y: 0 (Top), H (Bottom)
+                # We must flip Y so +1 maps to 0
+                v = ((1.0 - p_ndc[:, 1]) * H - 1) * 0.5
+                
+                u = u.long()
+                v = v.long()
+                u = torch.clamp(u, 0, W - 1)
+                v = torch.clamp(v, 0, H - 1)
+
+                # Sample the Mask
+                mask = view.gt_alpha_mask.to(points.device)
+                if len(mask.shape) == 3:
+                    mask_values = mask[0, v, u]
+                else:
+                    mask_values = mask[v, u]
+
+                is_background = (mask_values < 0.5) and in_frustum
+                background_votes[is_background] += 1
+
+        alpha = 1 - final_alpha
+
+        # Strict mode (TSDF style): If even 1 view sees background, delete it.
+        # Robust mode: If > 2 views see background, delete it (handles mask noise).
+        vote_threshold = 1 # Set to 0 for strict TSDF behavior, 2 or 3 for safer/noisier masks
+        
+        alpha[background_votes > vote_threshold] = 0.0
+
+    if return_color:
+        return alpha, final_color
+    return alpha

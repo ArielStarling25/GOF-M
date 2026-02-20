@@ -28,49 +28,68 @@ from einops import einsum
 from typing import List
 
 @torch.no_grad()
-def get_frustum_mask(points: torch.Tensor, cameras: List[Camera], near: float = 0.02, far: float = 1e6):
+def get_frustum_mask(points: torch.Tensor, cameras: List[Camera], near: float = 0.02, far: float = 1e6, batch_size: int = 16):
     H, W = cameras[0].image_height, cameras[0].image_width
+    N = points.shape[0]
+    device = points.device
+    
+    # Init a mask of all false (size N) on GPU
+    # this mask is progressively updated as we check batches of cameras
+    final_mask = torch.zeros(N, dtype=torch.bool, device=device)
 
-    intrinsics = torch.stack(
-        [
-            torch.Tensor(
-                [[cam.focal_x, 0, W / 2],
-                 [0, cam.focal_y, H / 2],
-                 [0, 0, 1]]
-            ) for cam in cameras
-        ], 
-        dim=0
-    ).to(points.device)
-
-    # full_proj_matrices: (n_view, 4, 4)
-    view_matrices = torch.stack(
-        [cam.world_view_transform for cam in cameras], dim=0
-    ).transpose(1, 2)
-
+    # prepare homogeneous points once (N, 4), as this doesn't change per camera
     ones = torch.ones_like(points[:, 0]).unsqueeze(-1)
-    # homo_points: (N, 4)
     homo_points = torch.cat([points, ones], dim=-1)
 
-    # uv_points: (n_view, N, 4, 4)
-    # Apply batch matrix multiplication to get uv_points for all cameras
-    view_points = einsum(view_matrices, homo_points, "n_view b c, N c -> n_view N b")
-    view_points = view_points[:, :, :3]
+    # iterate over cameras in small batches to save memory
+    for i in range(0, len(cameras), batch_size):
+        chunk_cameras = cameras[i : i + batch_size]
+        intrinsics = torch.stack(
+            [
+                torch.Tensor(
+                    [[cam.focal_x, 0, W / 2],
+                     [0, cam.focal_y, H / 2],
+                     [0, 0, 1]]
+                ) for cam in chunk_cameras
+            ], 
+            dim=0
+        ).to(device)
 
-    uv_points = einsum(intrinsics, view_points, "n_view b c, n_view N c -> n_view N b")
+        view_matrices = torch.stack(
+            [cam.world_view_transform for cam in chunk_cameras], dim=0
+        ).transpose(1, 2)
 
-    z = uv_points[:, :, -1:]
-    uv_points = uv_points[:, :, :2] / z
-    u, v = uv_points[:, :, 0], uv_points[:, :, 1]
+        # resultant shape is (batch_size, N, 3) instead of (all_cameras, N, 3)
+        view_points = einsum(view_matrices, homo_points, "n_view b c, N c -> n_view N b")
+        view_points = view_points[:, :, :3]
 
-    # Optionally, we can apply near-far culling
-    # Apply near-far culling
-    depth = view_points[:, :, -1]
-    cull_near_fars = (depth >= near) & (depth <= far)
+        uv_points = einsum(intrinsics, view_points, "n_view b c, n_view N c -> n_view N b")
 
-    # Apply frustum mask
-    mask = torch.any(cull_near_fars & (u >= 0) & (u <= W-1) & (v >= 0) & (v <= H-1), dim=0)
-    return mask
+        z = uv_points[:, :, -1:]
+        # Add epsilon to avoid div by zero errors
+        uv_points = uv_points[:, :, :2] / (z + 1e-8)
+        u, v = uv_points[:, :, 0], uv_points[:, :, 1]
 
+        # Apply near-far culling
+        depth = view_points[:, :, -1]
+        cull_near_fars = (depth >= near) & (depth <= far)
+
+        # Apply frustum mask logic for this batch
+        # visible if (Depth OK) AND (Inside Screen Bounds)
+        batch_mask = (cull_near_fars & (u >= 0) & (u <= W-1) & (v >= 0) & (v <= H-1))
+
+        # Check if points are visible in ANY camera within this current batch
+        batch_any_visible = torch.any(batch_mask, dim=0)
+
+        # final mask step VV
+ 
+        # A point is valid if it was visible in previous batches OR it is visible in this batch
+        final_mask |= batch_any_visible
+        
+        # delete temporary tensors to free VRAM for the next iteration
+        del view_points, uv_points, z, u, v, depth, cull_near_fars, batch_mask, intrinsics, view_matrices
+        # torch.cuda.empty_cache() 
+    return final_mask
 
 class GaussianModel:
 
@@ -258,6 +277,112 @@ class GaussianModel:
         merged = torch.cat([Sigma[:, :, 0], Sigma[:, 1:, 1], Sigma[:, 2:, 2], B.squeeze(), C], dim=1)
         
         return merged
+    
+    # Newer Implementation
+    @torch.no_grad()
+    def compute_3D_filter_2(self, cameras):
+        print("Computing 3D filter (Optimized)")
+        xyz = self.get_xyz
+        device = xyz.device
+        num_points = xyz.shape[0]
+        
+        # Initialize with a large value. We avoid 'inf' initially to prevent potential NaNs 
+        # during intermediate math, though masking handles this later.
+        min_distances = torch.full((num_points,), 100_000.0, device=device)
+        valid_points_mask = torch.zeros((num_points,), dtype=torch.bool, device=device)
+        
+        # This is significantly faster than accessing single camera attributes inside a loop.
+        # We assume all cameras in the list are on the same device or can be moved there.
+        cam_Rs = torch.stack([torch.tensor(c.R, dtype=torch.float32, device=device) for c in cameras])
+        cam_Ts = torch.stack([torch.tensor(c.T, dtype=torch.float32, device=device) for c in cameras])
+        
+        # Extract scalar params and reshape for broadcasting: (N_cams, 1)
+        cam_fxs = torch.tensor([c.focal_x for c in cameras], device=device, dtype=torch.float32).view(-1, 1)
+        cam_fys = torch.tensor([c.focal_y for c in cameras], device=device, dtype=torch.float32).view(-1, 1)
+        cam_Ws  = torch.tensor([c.image_width for c in cameras], device=device, dtype=torch.float32).view(-1, 1)
+        cam_Hs  = torch.tensor([c.image_height for c in cameras], device=device, dtype=torch.float32).view(-1, 1)
+        
+        # Determine the maximum focal length (used for the final scaling)
+        # In the original code, this was accumulating the max focal_x of valid cameras.
+        # Computing it globally is safe and faster.
+        max_focal_length = cam_fxs.max().item()
+        if max_focal_length == 0: max_focal_length = 1.0
+        
+        # A full broadcast (N_points x N_cameras) is dangerous for VRAM.
+        # Chunking allows us to vectorize without crashing the GPU.
+        chunk_size = 32 # Adjust based on VRAM (32-64 is usually a sweet spot)
+        num_cameras = len(cameras)
+        
+        # Reshape xyz for broadcasting: (1, N, 3)
+        xyz_unsqueezed = xyz.unsqueeze(0)
+
+        for i in range(0, num_cameras, chunk_size):
+            # print(f"num_cameras:[{num_cameras}]|chunk_size:[{chunk_size}]|iter:[{i}]")
+            end = min(i + chunk_size, num_cameras)
+            
+            # Slice current batch of camera params
+            R_batch = cam_Rs[i:end]   # (B, 3, 3)
+            T_batch = cam_Ts[i:end]   # (B, 3)
+            fx_batch = cam_fxs[i:end] # (B, 1)
+            fy_batch = cam_fys[i:end] # (B, 1)
+            W_batch = cam_Ws[i:end]   # (B, 1)
+            H_batch = cam_Hs[i:end]   # (B, 1)
+            
+            # --- Vectorized Transform ---
+            # xyz: (1, N, 3) x R: (B, 3, 3) -> (B, N, 3) due to broadcasting
+            # Then add T: (B, 1, 3)
+            xyz_cam = torch.matmul(xyz_unsqueezed, R_batch) + T_batch.unsqueeze(1)
+            
+            # Unbind coordinates for projection
+            x, y, z = xyz_cam.unbind(dim=-1) # (B, N)
+            
+            # --- Vectorized Projection ---
+            z_clamped = torch.clamp(z, min=0.001)
+            
+            # Screen projection
+            u = (x / z_clamped) * fx_batch + (W_batch * 0.5)
+            v = (y / z_clamped) * fy_batch + (H_batch * 0.5)
+            
+            # --- Vectorized Culling ---
+            # 1. Depth check
+            valid_depth = z > 0.2
+            
+            # 2. Frustum check (with padding)
+            # Logic: -0.15*W <= u <= 1.15*W
+            in_screen = (u >= -0.15 * W_batch) & (u <= 1.15 * W_batch) & \
+                        (v >= -0.15 * H_batch) & (v <= 1.15 * H_batch)
+            
+            # Combine masks
+            valid_batch = valid_depth & in_screen # (B, N)
+            
+            # --- Accumulate Results ---
+            # Update global valid mask: if point is valid in ANY camera in this batch
+            valid_points_mask |= valid_batch.any(dim=0)
+            
+            # Prepare distances for min reduction
+            # Clone z to avoid modifying the original xyz_cam
+            batch_dists = z.clone()
+            
+            # Set invalid pixels to infinity so they are ignored by the min() operation
+            batch_dists[~valid_batch] = float('inf')
+            
+            # Find the minimum distance for each point across this BATCH of cameras
+            # Update the global minimum distance
+            batch_min_dists, _ = batch_dists.min(dim=0) # Reduces (B, N) -> (N,)
+            min_distances = torch.min(min_distances, batch_min_dists)
+
+        # Set their distance to the max valid distance found (heuristic from original code)
+        if valid_points_mask.any():
+            fallback_dist = min_distances[valid_points_mask].max()
+        else:
+            fallback_dist = 100000.0
+            
+        min_distances[~valid_points_mask] = fallback_dist
+        
+        # 5. Final Transform (Box to Gaussian)
+        filter_3D = min_distances / max_focal_length * (0.2 ** 0.5)
+        print("Finished computing 3D filters (for this iteration)")
+        self.filter_3D = filter_3D[..., None]
 
     @torch.no_grad()
     def compute_3D_filter(self, cameras):
@@ -281,7 +406,6 @@ class GaussianModel:
             
             # project to screen space
             valid_depth = xyz_cam[:, 2] > 0.2 # TODO remove hard coded value
-            
             
             x, y, z = xyz_cam[:, 0], xyz_cam[:, 1], xyz_cam[:, 2]
             z = torch.clamp(z, min=0.001)
@@ -357,7 +481,7 @@ class GaussianModel:
             {'params': self.appearance_network.parameters(), 'lr': training_args.appearance_network_lr, "name": "appearance_network"}
         ]
 
-        self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
+        self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15) # adam optimiser
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
                                                     lr_final=training_args.position_lr_final*self.spatial_lr_scale,
                                                     lr_delay_mult=training_args.position_lr_delay_mult,

@@ -1,7 +1,8 @@
 import json
 import numpy as np
 
-scenes = ['bicycle', 'flowers', 'garden', 'stump', 'treehill', 'room', 'counter', 'kitchen', 'bonsai']
+# scenes = ['bicycle', 'flowers', 'garden', 'stump', 'treehill', 'room', 'counter', 'kitchen', 'bonsai']
+scenes = ['kitchen']
 
 # outdoor scenes
 # scenes = scenes[:5]
@@ -18,7 +19,7 @@ for scene in scenes:
     for output in output_dirs:
         json_file = f"{output}/{scene}/results.json"
         data = json.load(open(json_file))
-        data = data['ours_30000']
+        data = data['ours_10000']
         
         for k in ["PSNR", "SSIM", "LPIPS"]:
             all_metrics[k].append(data[k])

@@ -35,3 +35,10 @@ exp*
 eval_tnt/TrainingSet
 dtu_eval/Offical_DTU_Dataset
 __pycache__
+
+datasets/*
+!datasets/placeholder.txt
+
+custom_datasets/*
+run_logs
+run_logs/*
